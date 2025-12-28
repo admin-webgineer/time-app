@@ -120,11 +120,30 @@
 </div>
 
 <script>
-// --- تنظیمات اصلی (لینک وب اپ جدید را اینجا بگذارید) ---
+// ==================================================================
+// ⚠️⚠️ محل چسباندن لینک اسکریپت (مهم‌ترین بخش) ⚠️⚠️
+// لینک خود را به جای YOUR_NEW_DEPLOYMENT_ID در خط زیر بگذارید
+// ==================================================================
 const API_URL = "https://script.google.com/macros/s/AKfycbwGTi5x558NO2dq_ylKfGKnfntdRW03eiBzAfpGfgrqZrFMLkWfnqEhPSE2mT8pCWNHdw/exec"; 
 
 // --- مدیریت لایسنس ---
 let CURRENT_LICENSE = localStorage.getItem('app_license');
+
+window.onload = function() {
+  // بررسی امنیتی: آیا کاربر لینک را عوض کرده؟
+  if (API_URL.includes("YOUR_NEW_DEPLOYMENT_ID")) {
+    alert("⛔ خطا: شما فراموش کردید لینک اسکریپت را در فایل index.html جایگزین کنید!\nلطفاً فایل را ویرایش کرده و لینک Deploy را قرار دهید.");
+    return;
+  }
+
+  checkLicenseStart();
+  // رجیستر کردن سرویس ورکر با هندلینگ خطا
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('SW Registered'))
+      .catch(err => console.log('SW Error (File not found?):', err));
+  }
+};
 
 function checkLicenseStart() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -166,7 +185,6 @@ function showApp() {
   document.getElementById('license-display').innerText = `کد مشتری: ${CURRENT_LICENSE}`;
   loadConfig();
   updateQueueCount();
-  // تلاش اولیه برای سینک کردن داده‌های مانده در صف
   setTimeout(attemptSync, 2000);
 }
 
@@ -175,11 +193,6 @@ function navigate(pageId) {
   document.getElementById(`view-${pageId}`).classList.add('active');
   if(pageId === 'home') updateQueueCount();
 }
-
-window.onload = function() {
-  checkLicenseStart();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
-};
 
 // --- منطق زمانسنجی کارگاهی ---
 let ws_timer, ws_start = 0, ws_elapsed = 0, ws_laps = [];
@@ -201,10 +214,7 @@ function ws_finish() {
   clearInterval(ws_timer);
   const data = getFormData('view-workstation');
   if(!data) return;
-  
-  // ثبت داده در صف
   saveOffline({ id: Date.now(), type: 'workstation', data: { ...data, times: ws_laps }, timestamp: new Date().toISOString() });
-  
   ws_laps = []; ws_elapsed = 0; updateDisplay('ws-display', 0);
   document.getElementById('ws-laps').innerHTML = ''; document.getElementById('ws-btnStart').disabled = false;
   alert("✅ ثبت شد"); navigate('home');
@@ -226,10 +236,7 @@ function con_save() {
   const data = getFormData('view-continuous');
   if(!data) return;
   const totalTimeSec = parseFloat((con_elapsed / 1000).toFixed(2));
-  
-  // ثبت داده در صف
   saveOffline({ id: Date.now(), type: 'continuous', data: { ...data, totalTime: totalTimeSec, count: count, rate: (totalTimeSec / count).toFixed(2) }, timestamp: new Date().toISOString() });
-  
   con_reset(); document.getElementById('con-count').value = ''; alert("✅ ثبت شد"); navigate('home');
 }
 
@@ -266,22 +273,15 @@ async function attemptSync() {
   if(queue.length === 0) { document.getElementById('appStatus').innerText = "🟢 آنلاین"; return; }
   
   document.getElementById('appStatus').innerText = "🔄 ارسال...";
-  
-  // ترفند مهم: استفاده از text/plain برای جلوگیری از preflight request (CORS)
   try {
     const res = await fetch(API_URL, { 
       method: "POST", 
       body: JSON.stringify({ license: CURRENT_LICENSE, payload: queue }),
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8" 
-      }
+      headers: { "Content-Type": "text/plain;charset=utf-8" }
     });
     const json = await res.json();
     if(json.status === 'success') {
-       localStorage.setItem('offline_queue', '[]'); 
-       updateQueueCount(); 
-       document.getElementById('appStatus').innerText = "✅ انجام شد";
-       console.log("Sync Success:", json);
+       localStorage.setItem('offline_queue', '[]'); updateQueueCount(); document.getElementById('appStatus').innerText = "✅ انجام شد";
     } else { 
        document.getElementById('appStatus').innerText = "⚠️ خطا: " + json.message;
        console.error("Sync Error:", json);
@@ -293,31 +293,19 @@ async function attemptSync() {
 }
 
 async function loadConfig() {
-  // اول از کش لوکال بخوان تا فرم خالی نباشد
   const cached = localStorage.getItem('app_config');
-  if(cached) {
-    console.log("Loading config from local storage...");
-    populateAllSelects(JSON.parse(cached));
-  }
+  if(cached) { populateAllSelects(JSON.parse(cached)); }
 
-  // سپس از سرور تلاش کن بگیری
   if(navigator.onLine) {
     try {
       console.log("Fetching config from server...");
       const res = await fetch(`${API_URL}?license=${CURRENT_LICENSE}`);
       const json = await res.json();
-      
       if(json.status === 'success') {
-        // ذخیره در لوکال استوریج
         localStorage.setItem('app_config', JSON.stringify(json.data));
         populateAllSelects(json.data);
-        console.log("Config updated from server.");
-      } else {
-        console.error("Server error:", json.message);
       }
-    } catch(e) {
-      console.error("Network error fetching config:", e);
-    }
+    } catch(e) { console.error("Config fetch error:", e); }
   }
 }
 
@@ -334,9 +322,7 @@ function fill(el, list) {
   el.innerHTML = '<option>انتخاب...</option>'; 
   if(list && list.length > 0) {
     list.forEach(i => el.innerHTML += `<option value="${i}">${i}</option>`);
-  } else {
-    el.innerHTML = '<option>خالی</option>';
-  }
+  } else { el.innerHTML = '<option>خالی</option>'; }
   if (currentVal && list.includes(currentVal)) el.value = currentVal;
 }
 </script>
