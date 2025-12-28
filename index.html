@@ -38,7 +38,7 @@
 </head>
 <body>
 
-<!-- مودال دریافت لایسنس (فقط بار اول یا اگر در URL نبود) -->
+<!-- مودال دریافت لایسنس -->
 <div id="license-modal" style="display:none;">
   <h2>🔑 ورود به سیستم</h2>
   <p>لطفاً کد لایسنس شرکت خود را وارد کنید</p>
@@ -60,6 +60,7 @@
       <div style="margin-top: 30px; font-size: 0.8rem; color: #999;">
          صف آفلاین: <span id="queueCount">0</span> رکورد
          <br><a href="#" onclick="clearLicense()" style="color:#ea4335; text-decoration:none;">خروج از حساب</a>
+         <br><button onclick="loadConfig()" style="font-size:0.7rem; margin-top:10px; width:auto; padding:5px;">🔄 بروزرسانی لیست‌ها</button>
       </div>
     </div>
   </div>
@@ -119,8 +120,8 @@
 </div>
 
 <script>
-// --- تنظیمات اصلی (تنها جایی که باید ادیت کنید) ---
-const API_URL = "https://script.google.com/macros/s/AKfycbwGTi5x558NO2dq_ylKfGKnfntdRW03eiBzAfpGfgrqZrFMLkWfnqEhPSE2mT8pCWNHdw/exec"; 
+// --- تنظیمات اصلی (لینک وب اپ جدید را اینجا بگذارید) ---
+const API_URL = "https://script.google.com/macros/s/YOUR_NEW_DEPLOYMENT_ID/exec"; 
 
 // --- مدیریت لایسنس ---
 let CURRENT_LICENSE = localStorage.getItem('app_license');
@@ -130,15 +131,12 @@ function checkLicenseStart() {
   const urlLicense = urlParams.get('license');
 
   if (urlLicense) {
-    // اگر در لینک بود، ذخیره کن و برو تو
     CURRENT_LICENSE = urlLicense;
     localStorage.setItem('app_license', urlLicense);
     showApp();
   } else if (CURRENT_LICENSE) {
-    // اگر قبلاً ذخیره شده بود، برو تو
     showApp();
   } else {
-    // هیچکدام نبود، صفحه ورود نشان بده
     document.getElementById('license-modal').style.display = 'flex';
   }
 }
@@ -148,7 +146,6 @@ function saveLicenseManual() {
   if (val) {
     CURRENT_LICENSE = val;
     localStorage.setItem('app_license', val);
-    // رفرش صفحه با پارامتر جدید تا در URL هم بنشیند (برای بوک‌مارک)
     window.location.search = `?license=${val}`;
   } else {
     alert("لطفاً لایسنس را وارد کنید");
@@ -159,7 +156,7 @@ function clearLicense() {
   if(confirm("آیا مطمئن هستید؟")) {
     localStorage.removeItem('app_license');
     localStorage.removeItem('app_config');
-    window.location.href = window.location.pathname; // حذف کوئری پارامتر
+    window.location.href = window.location.pathname;
   }
 }
 
@@ -171,7 +168,6 @@ function showApp() {
   updateQueueCount();
 }
 
-// --- مدیریت Navigation ---
 function navigate(pageId) {
   document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
   document.getElementById(`view-${pageId}`).classList.add('active');
@@ -183,7 +179,7 @@ window.onload = function() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 };
 
-// --- منطق تایمرها (مشابه قبل) ---
+// --- منطق زمانسنجی کارگاهی ---
 let ws_timer, ws_start = 0, ws_elapsed = 0, ws_laps = [];
 function ws_startTimer() {
   ws_start = Date.now() - ws_elapsed;
@@ -203,12 +199,16 @@ function ws_finish() {
   clearInterval(ws_timer);
   const data = getFormData('view-workstation');
   if(!data) return;
+  
+  // ثبت داده در صف
   saveOffline({ id: Date.now(), type: 'workstation', data: { ...data, times: ws_laps }, timestamp: new Date().toISOString() });
+  
   ws_laps = []; ws_elapsed = 0; updateDisplay('ws-display', 0);
   document.getElementById('ws-laps').innerHTML = ''; document.getElementById('ws-btnStart').disabled = false;
   alert("✅ ثبت شد"); navigate('home');
 }
 
+// --- منطق زمانسنجی پیوسته ---
 let con_timer, con_start = 0, con_elapsed = 0, con_running = false;
 function con_startTimer() {
   if(con_running) return;
@@ -224,10 +224,14 @@ function con_save() {
   const data = getFormData('view-continuous');
   if(!data) return;
   const totalTimeSec = parseFloat((con_elapsed / 1000).toFixed(2));
+  
+  // ثبت داده در صف
   saveOffline({ id: Date.now(), type: 'continuous', data: { ...data, totalTime: totalTimeSec, count: count, rate: (totalTimeSec / count).toFixed(2) }, timestamp: new Date().toISOString() });
+  
   con_reset(); document.getElementById('con-count').value = ''; alert("✅ ثبت شد"); navigate('home');
 }
 
+// --- توابع کمکی ---
 function updateDisplay(id, ms) {
   const s = Math.floor(ms / 1000); const m = Math.floor(s / 60); const msShow = Math.floor((ms % 1000) / 10);
   document.getElementById(id).innerText = `${String(m).padStart(2,'0')}:${String(s%60).padStart(2,'0')}.${String(msShow).padStart(2,'0')}`;
@@ -240,7 +244,7 @@ function getFormData(viewId) {
   return { shift, operator, product: parent.querySelector('.sel-product').value, station: parent.querySelector('.sel-station').value };
 }
 
-// --- مدیریت دیتا ---
+// --- مدیریت دیتا و صف ---
 function saveOffline(record) {
   let queue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
   queue.push(record);
@@ -253,9 +257,13 @@ async function attemptSync() {
   if(!navigator.onLine) { document.getElementById('appStatus').innerText = "🔴 آفلاین"; return; }
   let queue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
   if(queue.length === 0) { document.getElementById('appStatus').innerText = "🟢 آنلاین"; return; }
+  
   document.getElementById('appStatus').innerText = "🔄 ارسال...";
   try {
-    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ license: CURRENT_LICENSE, payload: queue }) });
+    const res = await fetch(API_URL, { 
+      method: "POST", 
+      body: JSON.stringify({ license: CURRENT_LICENSE, payload: queue }) // ارسال دسته‌ای با لایسنس
+    });
     const json = await res.json();
     if(json.status === 'success') {
        localStorage.setItem('offline_queue', '[]'); updateQueueCount(); document.getElementById('appStatus').innerText = "✅ انجام شد";
@@ -264,29 +272,54 @@ async function attemptSync() {
 }
 
 async function loadConfig() {
+  // اول از کش لوکال بخوان تا فرم خالی نباشد
   const cached = localStorage.getItem('app_config');
-  if(cached) populateAllSelects(JSON.parse(cached));
+  if(cached) {
+    console.log("Loading config from local storage...");
+    populateAllSelects(JSON.parse(cached));
+  }
+
+  // سپس از سرور تلاش کن بگیری
   if(navigator.onLine) {
     try {
+      console.log("Fetching config from server...");
       const res = await fetch(`${API_URL}?license=${CURRENT_LICENSE}`);
       const json = await res.json();
+      
       if(json.status === 'success') {
+        // ذخیره در لوکال استوریج
         localStorage.setItem('app_config', JSON.stringify(json.data));
         populateAllSelects(json.data);
-      } else if (json.message === "Invalid or Inactive License") {
-        alert("لایسنس شما غیرفعال است!");
-        clearLicense();
+        console.log("Config updated from server.");
+      } else {
+        console.error("Server error:", json.message);
       }
-    } catch(e) {}
+    } catch(e) {
+      console.error("Network error fetching config:", e);
+    }
   }
 }
+
 function populateAllSelects(data) {
+  if (!data) return;
   document.querySelectorAll('.sel-shift').forEach(el => fill(el, data.shifts));
   document.querySelectorAll('.sel-operator').forEach(el => fill(el, data.operators));
   document.querySelectorAll('.sel-product').forEach(el => fill(el, data.products));
   document.querySelectorAll('.sel-station').forEach(el => fill(el, data.stations));
 }
-function fill(el, list) { el.innerHTML = '<option>انتخاب...</option>'; if(list) list.forEach(i => el.innerHTML += `<option>${i}</option>`); }
+
+function fill(el, list) { 
+  // مقدار فعلی را نگه دار تا اگر کاربر انتخاب کرده نپرد
+  const currentVal = el.value;
+  el.innerHTML = '<option>انتخاب...</option>'; 
+  if(list && list.length > 0) {
+    list.forEach(i => el.innerHTML += `<option value="${i}">${i}</option>`);
+  } else {
+    el.innerHTML = '<option>خالی</option>';
+  }
+  // اگر مقدار قبلی هنوز در لیست جدید بود، انتخابش کن
+  if (currentVal && list.includes(currentVal)) el.value = currentVal;
+}
 </script>
 </body>
 </html>
