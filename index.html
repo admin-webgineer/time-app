@@ -60,7 +60,7 @@
       <div style="margin-top: 30px; font-size: 0.8rem; color: #999;">
          صف آفلاین: <span id="queueCount">0</span> رکورد
          <br><a href="#" onclick="clearLicense()" style="color:#ea4335; text-decoration:none;">خروج از حساب</a>
-         <br><button onclick="loadConfig()" style="font-size:0.7rem; margin-top:10px; width:auto; padding:5px;">🔄 بروزرسانی لیست‌ها</button>
+         <br><button onclick="forceSync()" style="font-size:0.7rem; margin-top:10px; width:auto; padding:5px; background:#fbbc04; color:#333;">🔄 تلاش مجدد برای ارسال</button>
       </div>
     </div>
   </div>
@@ -121,7 +121,7 @@
 
 <script>
 // --- تنظیمات اصلی (لینک وب اپ جدید را اینجا بگذارید) ---
-const API_URL = "https://script.google.com/macros/s/AKfycbwGTi5x558NO2dq_ylKfGKnfntdRW03eiBzAfpGfgrqZrFMLkWfnqEhPSE2mT8pCWNHdw/exec"; 
+const API_URL = "https://script.google.com/macros/s/YOUR_NEW_DEPLOYMENT_ID/exec"; 
 
 // --- مدیریت لایسنس ---
 let CURRENT_LICENSE = localStorage.getItem('app_license');
@@ -166,6 +166,8 @@ function showApp() {
   document.getElementById('license-display').innerText = `کد مشتری: ${CURRENT_LICENSE}`;
   loadConfig();
   updateQueueCount();
+  // تلاش اولیه برای سینک کردن داده‌های مانده در صف
+  setTimeout(attemptSync, 2000);
 }
 
 function navigate(pageId) {
@@ -253,22 +255,41 @@ function saveOffline(record) {
 }
 function updateQueueCount() { document.getElementById('queueCount').innerText = JSON.parse(localStorage.getItem('offline_queue') || '[]').length; }
 
+function forceSync() {
+  document.getElementById('appStatus').innerText = "⏳ تلاش برای ارسال دستی...";
+  attemptSync();
+}
+
 async function attemptSync() {
   if(!navigator.onLine) { document.getElementById('appStatus').innerText = "🔴 آفلاین"; return; }
   let queue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
   if(queue.length === 0) { document.getElementById('appStatus').innerText = "🟢 آنلاین"; return; }
   
   document.getElementById('appStatus').innerText = "🔄 ارسال...";
+  
+  // ترفند مهم: استفاده از text/plain برای جلوگیری از preflight request (CORS)
   try {
     const res = await fetch(API_URL, { 
       method: "POST", 
-      body: JSON.stringify({ license: CURRENT_LICENSE, payload: queue }) // ارسال دسته‌ای با لایسنس
+      body: JSON.stringify({ license: CURRENT_LICENSE, payload: queue }),
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8" 
+      }
     });
     const json = await res.json();
     if(json.status === 'success') {
-       localStorage.setItem('offline_queue', '[]'); updateQueueCount(); document.getElementById('appStatus').innerText = "✅ انجام شد";
-    } else { document.getElementById('appStatus').innerText = "⚠️ خطا: " + json.message; }
-  } catch(e) { document.getElementById('appStatus').innerText = "⚠️ خطا شبکه"; }
+       localStorage.setItem('offline_queue', '[]'); 
+       updateQueueCount(); 
+       document.getElementById('appStatus').innerText = "✅ انجام شد";
+       console.log("Sync Success:", json);
+    } else { 
+       document.getElementById('appStatus').innerText = "⚠️ خطا: " + json.message;
+       console.error("Sync Error:", json);
+    }
+  } catch(e) { 
+    document.getElementById('appStatus').innerText = "⚠️ خطا شبکه (داده‌ها امن هستند)"; 
+    console.error("Fetch Error:", e);
+  }
 }
 
 async function loadConfig() {
@@ -309,7 +330,6 @@ function populateAllSelects(data) {
 }
 
 function fill(el, list) { 
-  // مقدار فعلی را نگه دار تا اگر کاربر انتخاب کرده نپرد
   const currentVal = el.value;
   el.innerHTML = '<option>انتخاب...</option>'; 
   if(list && list.length > 0) {
@@ -317,7 +337,6 @@ function fill(el, list) {
   } else {
     el.innerHTML = '<option>خالی</option>';
   }
-  // اگر مقدار قبلی هنوز در لیست جدید بود، انتخابش کن
   if (currentVal && list.includes(currentVal)) el.value = currentVal;
 }
 </script>
