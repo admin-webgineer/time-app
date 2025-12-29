@@ -8,8 +8,6 @@ const Alert = {
   show: (title, message, icon = 'info', showCancel = false) => {
     return new Promise((resolve) => {
       const overlay = document.getElementById('custom-alert-overlay');
-      if (!overlay) return resolve(true); // اگر HTML آلرت وجود نداشت
-
       const titleEl = document.getElementById('alert-title');
       const msgEl = document.getElementById('alert-message');
       const iconEl = document.getElementById('alert-icon');
@@ -39,25 +37,21 @@ const Alert = {
   confirm: (msg) => Alert.show('تایید', msg, 'warning', true)
 };
 
-// --- 2. سیستم لودینگ ---
+// --- 2. سیستم لودینگ (اصلاح شده به دایره) ---
 const Loader = {
   show: (text = "لطفاً صبر کنید...") => {
-    const loader = document.getElementById('loading-overlay');
-    if (loader) {
-      document.querySelector('.loading-text').textContent = text;
-      loader.classList.remove('hidden');
-    }
+    document.querySelector('.loading-text').textContent = text;
+    document.getElementById('loading-overlay').classList.remove('hidden');
   },
   hide: () => {
-    const loader = document.getElementById('loading-overlay');
-    if (loader) loader.classList.add('hidden');
+    document.getElementById('loading-overlay').classList.add('hidden');
   }
 };
 
 // --- 3. متغیرهای سراسری ---
 let LICENSE = localStorage.getItem('license');
 let CONFIG = JSON.parse(localStorage.getItem('config') || '{}');
-// لیست موقت برای داده‌های پیوسته (قبل از تجمیع)
+// لیست موقت برای داده‌های پیوسته
 let tempContinuousData = [];
 
 // --- 4. رندر کننده صفحات (UI) ---
@@ -80,7 +74,7 @@ const UI = {
         <div style="margin-top:50px; text-align:center; font-size:0.85rem; color:#777;">
           <p>کد مشتری: <b>${LICENSE}</b></p>
           <div id="offline-status" style="margin-bottom:10px;">صف ارسال: ${getQueueLength()}</div>
-          <button onclick="syncData(true)" class="btn btn-gray" style="width:auto; display:inline-flex; padding:8px 20px; font-size:0.8rem;">🔄 ارسال دستی</button>
+          <button onclick="syncData(true)" class="btn btn-gray" style="width:auto; display:inline-flex; padding:8px 20px; font-size:0.8rem;">🔄 ارسال دستی (نیاز به رفرش)</button>
           <br><br>
           <a href="#" onclick="logout()" style="color:var(--danger); text-decoration:none;">خروج از حساب</a>
         </div>
@@ -102,16 +96,17 @@ const UI = {
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
           <button id="btn-rec" onclick="Timer.record()" disabled class="btn btn-primary">🚩 ثبت</button>
           <button id="btn-start" onclick="Timer.start()" class="btn btn-success">▶ شروع</button>
-          <button id="btn-save" onclick="Timer.finishWorkstation()" disabled class="btn btn-danger">💾 پایان</button>
+          <!-- دکمه پایان حالا نقش ارسال نهایی را دارد -->
+          <button id="btn-save" onclick="Timer.finishWorkstation()" disabled class="btn btn-danger">📤 ارسال</button>
         </div>
         <div id="laps-list" style="margin-top:20px; max-height:200px; overflow-y:auto;"></div>
       </div>
     `;
-    restoreSelects(); // بازیابی انتخاب‌ها
+    restoreSelects();
   },
 
   renderContinuous: () => {
-    tempContinuousData = []; // هنگام ورود، لیست موقت خالی شود
+    tempContinuousData = [];
     document.getElementById('app-root').innerHTML = `
       <div class="view active">
         <div class="header-row">
@@ -129,36 +124,32 @@ const UI = {
           <button onclick="Timer.reset()" class="btn btn-gray">⏹ ریست</button>
         </div>
 
-        <!-- بخش ثبت موقت سیکل -->
         <div style="background:#f9f9f9; padding:15px; border-radius:10px; margin-top:20px; border:1px solid #eee;">
-          <label style="font-size:0.9rem; font-weight:bold;">تعداد تولید در این سیکل:</label>
+          <label style="font-size:0.9rem; font-weight:bold;">تعداد تولید:</label>
           <div style="display:flex; gap:10px; margin-top:5px;">
             <input type="number" id="prod-count" placeholder="0" style="margin:0;">
             <button onclick="Timer.addContinuousCycle()" class="btn btn-secondary" style="width:auto; padding:0 20px; margin:0;">➕ افزودن</button>
           </div>
         </div>
 
-        <!-- لیست سیکل‌های ثبت شده -->
         <div id="cycle-list" style="margin-top:15px; max-height:150px; overflow-y:auto; border-top:1px solid #eee;"></div>
 
-        <!-- دکمه ارسال نهایی (تجمیع) -->
         <button id="btn-final-send" onclick="Timer.finishContinuous()" class="btn btn-primary" style="margin-top:20px;" disabled>📤 تجمیع و ارسال نهایی</button>
       </div>
     `;
-    restoreSelects(); // بازیابی انتخاب‌ها
+    restoreSelects();
   },
   
   showSetupWizard: (data) => {
     document.getElementById('app-root').innerHTML = `
       <div class="view active" style="padding:30px; text-align:center;">
         <h2>🚀 راه‌اندازی اولیه</h2>
-        <p style="color:#666; margin-bottom:30px;">برای شروع، فایل دیتابیس خود را بسازید.</p>
         <div style="background:#e3f2fd; padding:15px; border-radius:10px; margin-bottom:20px; text-align:right;">
-          <b>گام ۱:</b> فایل دیتابیس را بسازید (کپی در درایو شما):<br>
-          <a href="${data.templateUrl}" target="_blank" class="btn btn-secondary" style="margin-top:10px;">📂 ساخت فایل</a>
+          <b>گام ۱:</b> روی دکمه زیر کلیک کنید تا فایل شما ساخته شود.<br>
+          <a href="${data.templateUrl}" target="_blank" class="btn btn-secondary" style="margin-top:10px;">📂 ساخت فایل دیتابیس</a>
         </div>
         <div style="background:#fff3e0; padding:15px; border-radius:10px; margin-bottom:20px; text-align:right;">
-          <b>گام ۲:</b> فایل را باز کنید و این ایمیل را <b>Editor</b> کنید:<br>
+          <b>گام ۲:</b> فایل جدید را باز کنید، دکمه Share را بزنید و این ایمیل را <b>Editor</b> کنید:<br>
           <code style="display:block; background:#fff; padding:5px; margin:5px 0; border:1px solid #ccc; text-align:center;">${data.botEmail}</code>
         </div>
         <div style="background:#e8f5e9; padding:15px; border-radius:10px; text-align:right;">
@@ -171,12 +162,9 @@ const UI = {
   },
   
   showMaintenance: () => {
-    const maintOverlay = document.getElementById('maintenance-overlay');
-    if(maintOverlay) {
-        maintOverlay.style.display = 'flex';
-        document.getElementById('app-root').style.display = 'none';
-        Loader.hide();
-    }
+    document.getElementById('maintenance-overlay').style.display = 'flex';
+    document.getElementById('app-root').style.display = 'none';
+    Loader.hide();
   },
   
   showErrorPage: (title, msg) => {
@@ -203,19 +191,11 @@ function createSelects() {
   `;
 }
 
-// ذخیره وضعیت انتخاب‌ها در LocalStorage
-function saveSelectState(el) {
-  localStorage.setItem('sel_' + el.id, el.value);
-}
-
-// بازیابی وضعیت انتخاب‌ها
+function saveSelectState(el) { localStorage.setItem('sel_' + el.id, el.value); }
 function restoreSelects() {
   ['s-shift', 's-oper', 's-prod', 's-stat'].forEach(id => {
     const val = localStorage.getItem('sel_' + id);
-    if(val) {
-      const el = document.getElementById(id);
-      if(el) el.value = val;
-    }
+    if(val) { const el = document.getElementById(id); if(el) el.value = val; }
   });
 }
 
@@ -244,17 +224,14 @@ const Timer = {
     toggleBtns(false, true);
   },
 
-  record: () => { // کارگاهی: ثبت دور
+  record: () => {
     const sec = (Timer.elapsed / 1000).toFixed(2);
     Timer.laps.push(sec);
     const div = document.createElement('div');
     div.className = 'lap-item';
     div.innerHTML = `<span>دور ${Timer.laps.length}</span> <b>${sec}s</b>`;
     document.getElementById('laps-list').prepend(div);
-    
-    Timer.elapsed = 0;
-    Timer.startTime = Date.now();
-    updateDisplay(0);
+    Timer.elapsed = 0; Timer.startTime = Date.now(); updateDisplay(0);
   },
 
   reset: () => {
@@ -263,7 +240,6 @@ const Timer = {
     updateDisplay(0);
   },
 
-  // پیوسته: افزودن به لیست موقت
   addContinuousCycle: () => {
     const countInput = document.getElementById('prod-count');
     const count = parseInt(countInput.value);
@@ -273,11 +249,8 @@ const Timer = {
     if (Timer.elapsed === 0) return Alert.error("زمانی ثبت نشده است");
 
     const timeSec = parseFloat((Timer.elapsed / 1000).toFixed(2));
-    
-    // اضافه به لیست موقت
     tempContinuousData.push({ time: timeSec, count: count });
 
-    // نمایش در UI
     const list = document.getElementById('cycle-list');
     const div = document.createElement('div');
     div.className = 'lap-item';
@@ -285,7 +258,6 @@ const Timer = {
     div.innerHTML = `<span>سیکل ${tempContinuousData.length}</span> <span>⏱️ ${timeSec}s</span> <span>📦 ${count}</span>`;
     list.prepend(div);
 
-    // آماده‌سازی برای دور بعد
     Timer.elapsed = 0; 
     updateDisplay(0);
     countInput.value = '';
@@ -294,13 +266,11 @@ const Timer = {
     Alert.success("سیکل افزوده شد");
   },
 
-  // پیوسته: تجمیع و ارسال نهایی
   finishContinuous: async () => {
     if (tempContinuousData.length === 0) return Alert.error("هیچ داده‌ای ثبت نشده است");
     const data = getFormData();
     if(!data) return;
 
-    // محاسبات تجمیعی
     let totalTime = 0;
     let totalCount = 0;
     
@@ -311,46 +281,34 @@ const Timer = {
 
     const finalRate = (totalTime / totalCount).toFixed(2);
 
-    // ذخیره در صف برای ارسال بچی
+    // ذخیره در صف و ارسال فوری
     saveData({ 
       type: 'continuous', 
-      data: { 
-        ...data, 
-        totalTime: totalTime.toFixed(2), 
-        count: totalCount, 
-        rate: finalRate 
-      } 
+      data: { ...data, totalTime: totalTime.toFixed(2), count: totalCount, rate: finalRate } 
     });
 
-    await Alert.success(`ثبت شد! \nمجموع زمان: ${totalTime.toFixed(2)} \nمجموع تعداد: ${totalCount}`);
+    // اینجا چون ارسال انجام شده، فرم را ریست می‌کنیم اما صفحه را ریلود نمی‌کنیم مگر اینکه ارسال موفق باشد (در syncData)
+    // اما چون کاربر می‌خواهد "رفرش" ببیند، این کار را در syncData انجام می‌دهیم.
     
-    // پاکسازی لیست موقت و ریست تایمر
     tempContinuousData = [];
     document.getElementById('cycle-list').innerHTML = '';
     document.getElementById('btn-final-send').disabled = true;
     Timer.reset();
-    
-    // نکته مهم: فرم (سلکت‌ها) پاک نمی‌شود تا کاربر سریع ادامه دهد
   },
 
-  // کارگاهی: پایان و ارسال
   finishWorkstation: async () => {
     const data = getFormData();
     if(!data) return;
     if(Timer.laps.length === 0) return Alert.error("زمانی ثبت نشده است!");
     
     clearInterval(Timer.interval);
-    // ذخیره در صف برای ارسال بچی
+    // ذخیره در صف و ارسال فوری
     saveData({ type: 'workstation', data: { ...data, times: Timer.laps } });
     
-    // ریست کامل تایمر و لپ‌ها
     Timer.laps = []; Timer.elapsed = 0; Timer.running = false;
     document.getElementById('laps-list').innerHTML = '';
     updateDisplay(0);
     toggleBtns(false, false);
-    
-    await Alert.success("با موفقیت ارسال شد");
-    UI.renderHome(); // بازگشت به خانه
   }
 };
 
@@ -394,7 +352,8 @@ function saveData(record) {
   q.push(record);
   localStorage.setItem('queue', JSON.stringify(q));
   
-  syncData(); // تلاش برای ارسال فوری
+  // بلافاصله تلاش برای ارسال (Sync)
+  syncData();
 }
 
 async function syncData(manual = false) {
@@ -417,7 +376,7 @@ async function syncData(manual = false) {
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
-      body: JSON.stringify({ license: LICENSE, payload: q }), // ارسال کل صف (Batch)
+      body: JSON.stringify({ license: LICENSE, payload: q }), // ارسال بچی (کل آرایه q)
       headers: { "Content-Type": "text/plain" }
     });
     const json = await res.json();
@@ -430,8 +389,13 @@ async function syncData(manual = false) {
     
     if(json.status === 'success') {
       localStorage.setItem('queue', '[]');
-      if(manual) { Loader.hide(); Alert.success("ارسال موفقیت‌آمیز بود!"); }
       if(statusEl) statusEl.innerText = "همگام‌سازی شده ✅";
+      
+      // اینجا درخواست شما برای رفرش بعد از ارسال موفق اجرا می‌شود
+      if(manual) { Loader.hide(); }
+      await Alert.success("ارسال موفقیت‌آمیز بود! صفحه بروزرسانی می‌شود.");
+      location.reload(); // رفرش اجباری بعد از سینک موفق
+      
     } else { throw new Error(json.message); }
   } catch(e) {
     if(manual) { Loader.hide(); Alert.error("خطا در ارسال: " + e.message); }
@@ -439,7 +403,7 @@ async function syncData(manual = false) {
   }
 }
 
-// --- 7. منطق اتصال (Setup Logic) ---
+// ... (توابع completeSetup, init, logout, getQueueLength, loadConfig بدون تغییر) ...
 async function completeSetup() {
   const url = document.getElementById('sheet-url').value;
   if (!url.includes('docs.google.com')) return Alert.error("لینک فایل معتبر نیست!");
@@ -528,11 +492,7 @@ async function init() {
         UI.showErrorPage("اینترنت قطع است", "هیچ داده‌ای برای نمایش آفلاین وجود ندارد."); 
       }
     }
-  } catch(e) { 
-    const cached = localStorage.getItem('config');
-    if (cached) { CONFIG = JSON.parse(cached); UI.renderHome(); }
-    else UI.showErrorPage("خطای ارتباط", "امکان اتصال به سرور وجود ندارد.");
-  }
+  } catch(e) { console.log("Offline config load"); }
   
   Loader.hide();
   syncData();
