@@ -1,65 +1,74 @@
-const CACHE_NAME = 'factory-pwa-v3'; // با هر بار تغییر کد، این عدد را بالا ببرید
+// نام کش اصلی (فقط وقتی ساختار کلی عوض شد این را تغییر دهید)
+const CACHE_NAME = 'factory-pwa-core-v1';
+
+// فایل‌هایی که حتما باید کش شوند تا برنامه آفلاین کار کند
 const ASSETS = [
   './index.html',
   './manifest.json'
-  // نکته: اگر فایلی در اینجا باشد ولی در گیتهاب نباشد، کل سرویس‌ورکر از کار می‌افتد.
-  // فعلا فقط فایل‌های حیاتی را کش می‌کنیم.
 ];
 
-// 1. نصب و کش کردن فایل‌های حیاتی
 self.addEventListener('install', (event) => {
-  self.skipWaiting(); // فعال‌سازی فوری نسخه جدید
+  self.skipWaiting(); // نصب فوری
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('SW: Caching Assets');
-      return cache.addAll(ASSETS).catch(err => {
-        console.error('SW: Cache addAll failed', err);
-        // اگر فایلی پیدا نشد، خطا را نادیده نگیر اما باعث توقف کامل نشو
-      });
+      console.log('SW: Pre-caching assets');
+      return cache.addAll(ASSETS).catch(err => console.error('SW: Pre-cache failed', err));
     })
   );
 });
 
-// 2. پاکسازی کش‌های قدیمی
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
-            console.log('SW: Clearing Old Cache', key);
+            console.log('SW: Cleaning old cache', key);
             return caches.delete(key);
           }
         })
       );
     })
   );
-  self.clients.claim(); // کنترل فوری کلاینت‌ها
+  self.clients.claim();
 });
 
-// 3. استراتژی: اول کش، بعد شبکه (برای سرعت بالا)
 self.addEventListener('fetch', (event) => {
-  // درخواست‌های ارسالی به گوگل شیت (API) نباید کش شوند
+  // 1. درخواست‌های API (مثل گوگل شیت) را هرگز کش نکن
   if (event.request.method === 'POST' || event.request.url.includes('script.google.com')) {
     return;
   }
 
+  // 2. استراتژی Network First برای فایل‌های اصلی (HTML, JS, CSS)
+  // این باعث می‌شود همیشه آخرین نسخه را چک کند، و اگر آفلاین بود از کش بخواند
+  // این یعنی نیازی نیست دستی ورژن را تغییر دهید!
+  if (event.request.mode === 'navigate' || event.request.destination === 'document') {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          return caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, networkResponse.clone());
+            return networkResponse;
+          });
+        })
+        .catch(() => {
+          return caches.match(event.request); // اگر آفلاین بود، از کش بده
+        })
+    );
+    return;
+  }
+
+  // 3. استراتژی Stale-While-Revalidate برای سایر فایل‌ها (تصاویر و ...)
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-      // اگر در کش بود همان را بده (سرعت آنی)
-      if (cachedResponse) {
-        // در پس‌زمینه نسخه جدید را هم بگیر تا برای دفعه بعد آماده باشد
-        fetch(event.request).then(networkResponse => {
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, networkResponse);
-          });
-        }).catch(() => {}); // اگر آفلاین بود مهم نیست
-        
-        return cachedResponse;
-      }
-      
-      // اگر در کش نبود از شبکه بگیر
-      return fetch(event.request);
+      const fetchPromise = fetch(event.request).then((networkResponse) => {
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, networkResponse.clone());
+        });
+        return networkResponse;
+      }).catch(() => {}); // خطا را نادیده بگیر اگر آفلاینیم
+
+      return cachedResponse || fetchPromise;
     })
   );
 });
