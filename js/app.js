@@ -204,7 +204,7 @@ const UI = {
             <b style="color:#444;">ساخت فایل دیتابیس</b>
           </div>
           <p style="font-size:0.85rem; color:#666; margin-bottom:15px; line-height:1.6;">یک کپی از فایل اکسل گوگل در درایو خود بسازید.</p>
-          <a href="${data.templateUrl}" target="_blank" class="btn btn-primary" style="background:#fff; color:#4285f4; border:1px solid #4285f4; font-size:0.9rem; padding:10px;">📂 ایجاد فایل اکسل</a>
+          <a href="${data.templateUrl}" target="_blank" class="btn btn-primary" style="background:#fff; color:#4285f4; border:1px solid #4285f4; font-size:0.9rem; padding:10px; max-width: 380px;">📂 ایجاد فایل اکسل</a>
         </div>
 
         <div class="setup-card" style="background:white; padding:20px; border-radius:15px; box-shadow:0 4px 15px rgba(0,0,0,0.05); margin-bottom:20px; border-right: 5px solid #fbbc04;">
