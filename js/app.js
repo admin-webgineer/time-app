@@ -37,14 +37,18 @@ const Alert = {
   confirm: (msg) => Alert.show('تایید', msg, 'warning', true)
 };
 
-// --- 2. سیستم لودینگ (اصلاح شده به دایره) ---
+// --- 2. سیستم لودینگ (اصلاح شده) ---
 const Loader = {
   show: (text = "لطفاً صبر کنید...") => {
-    document.querySelector('.loading-text').textContent = text;
-    document.getElementById('loading-overlay').classList.remove('hidden');
+    const loader = document.getElementById('loading-overlay');
+    if (loader) {
+      document.querySelector('.loading-text').textContent = text;
+      loader.classList.remove('hidden');
+    }
   },
   hide: () => {
-    document.getElementById('loading-overlay').classList.add('hidden');
+    const loader = document.getElementById('loading-overlay');
+    if (loader) loader.classList.add('hidden');
   }
 };
 
@@ -231,7 +235,10 @@ const Timer = {
     div.className = 'lap-item';
     div.innerHTML = `<span>دور ${Timer.laps.length}</span> <b>${sec}s</b>`;
     document.getElementById('laps-list').prepend(div);
-    Timer.elapsed = 0; Timer.startTime = Date.now(); updateDisplay(0);
+    
+    Timer.elapsed = 0;
+    Timer.startTime = Date.now();
+    updateDisplay(0);
   },
 
   reset: () => {
@@ -281,15 +288,11 @@ const Timer = {
 
     const finalRate = (totalTime / totalCount).toFixed(2);
 
-    // ذخیره در صف و ارسال فوری
     saveData({ 
       type: 'continuous', 
       data: { ...data, totalTime: totalTime.toFixed(2), count: totalCount, rate: finalRate } 
     });
 
-    // اینجا چون ارسال انجام شده، فرم را ریست می‌کنیم اما صفحه را ریلود نمی‌کنیم مگر اینکه ارسال موفق باشد (در syncData)
-    // اما چون کاربر می‌خواهد "رفرش" ببیند، این کار را در syncData انجام می‌دهیم.
-    
     tempContinuousData = [];
     document.getElementById('cycle-list').innerHTML = '';
     document.getElementById('btn-final-send').disabled = true;
@@ -352,7 +355,6 @@ function saveData(record) {
   q.push(record);
   localStorage.setItem('queue', JSON.stringify(q));
   
-  // بلافاصله تلاش برای ارسال (Sync)
   syncData();
 }
 
@@ -370,18 +372,18 @@ async function syncData(manual = false) {
     return;
   }
 
+  // نمایش لودینگ قبل از ارسال و رفرش
   if(manual) Loader.show("در حال ارسال داده‌ها...");
   else if(statusEl) statusEl.innerText = "در حال ارسال...";
   
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
-      body: JSON.stringify({ license: LICENSE, payload: q }), // ارسال بچی (کل آرایه q)
+      body: JSON.stringify({ license: LICENSE, payload: q }),
       headers: { "Content-Type": "text/plain" }
     });
     const json = await res.json();
     
-    // مدیریت حالت بروزرسانی سیستم
     if (json.status === 'maintenance') {
       UI.showMaintenance();
       return;
@@ -391,11 +393,12 @@ async function syncData(manual = false) {
       localStorage.setItem('queue', '[]');
       if(statusEl) statusEl.innerText = "همگام‌سازی شده ✅";
       
-      // اینجا درخواست شما برای رفرش بعد از ارسال موفق اجرا می‌شود
-      if(manual) { Loader.hide(); }
-      await Alert.success("ارسال موفقیت‌آمیز بود! صفحه بروزرسانی می‌شود.");
-      location.reload(); // رفرش اجباری بعد از سینک موفق
-      
+      // لاجیک رفرش: نمایش لودینگ، نمایش پیغام موفقیت و سپس رفرش صفحه
+      if(manual) { 
+        Loader.show("دریافت اطلاعات جدید..."); // تغییر متن لودینگ برای کاربر
+        await Alert.success("ارسال موفقیت‌آمیز بود!");
+        setTimeout(() => window.location.reload(), 500); 
+      }
     } else { throw new Error(json.message); }
   } catch(e) {
     if(manual) { Loader.hide(); Alert.error("خطا در ارسال: " + e.message); }
