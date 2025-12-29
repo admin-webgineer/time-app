@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>سیستم زمان‌سنجی</title>
+  <link rel="manifest" href="manifest.json">
+  
+  <!-- کشینگ هوشمند: هر بار تغییر دادید، عدد v را عوض کنید -->
+  <script>var APP_VERSION = "1.0.0";</script>
+</head>
+<body>
+
+  <!-- کانتینر لودینگ -->
+  <div id="loading-overlay" class="hidden">
+    <div class="spinner"></div>
+    <p class="loading-text">...</p>
+  </div>
+
+  <!-- کانتینر آلرت -->
+  <div id="custom-alert-overlay" class="hidden">
+    <div class="custom-alert-box">
+      <div id="alert-icon" class="alert-icon"></div>
+      <h3 id="alert-title" class="alert-title"></h3>
+      <p id="alert-message" class="alert-message"></p>
+      <div class="alert-buttons">
+        <button id="alert-ok" class="btn btn-primary">تایید</button>
+        <button id="alert-cancel" class="btn btn-gray hidden">لغو</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ریشه اپلیکیشن -->
+  <div id="app-root" class="app-container"></div>
+
+  <!-- لودر استایل و اسکریپت -->
+  <script>
+    var css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'css/style.css?v=' + APP_VERSION;
+    document.head.appendChild(css);
+
+    var js = document.createElement('script');
+    js.src = 'js/app.js?v=' + APP_VERSION;
+    document.body.appendChild(js);
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
+    }
+  </script>
+</body>
+</html>
