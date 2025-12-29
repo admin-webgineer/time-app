@@ -1,12 +1,15 @@
 // ============================================
+// ⚠️ لینک اسکریپت خود را اینجا قرار دهید
 const API_URL = "https://script.google.com/macros/s/AKfycbwGTi5x558NO2dq_ylKfGKnfntdRW03eiBzAfpGfgrqZrFMLkWfnqEhPSE2mT8pCWNHdw/exec"; 
 // ============================================
 
-// --- 1. سیستم آلرت اختصاصی ---
+// --- 1. سیستم آلرت اختصاصی (بدون کتابخانه) ---
 const Alert = {
   show: (title, message, icon = 'info', showCancel = false) => {
     return new Promise((resolve) => {
       const overlay = document.getElementById('custom-alert-overlay');
+      if (!overlay) return resolve(true); // اگر HTML آلرت وجود نداشت
+
       const titleEl = document.getElementById('alert-title');
       const msgEl = document.getElementById('alert-message');
       const iconEl = document.getElementById('alert-icon');
@@ -39,17 +42,23 @@ const Alert = {
 // --- 2. سیستم لودینگ ---
 const Loader = {
   show: (text = "لطفاً صبر کنید...") => {
-    document.querySelector('.loading-text').textContent = text;
-    document.getElementById('loading-overlay').classList.remove('hidden');
+    const loader = document.getElementById('loading-overlay');
+    if (loader) {
+      document.querySelector('.loading-text').textContent = text;
+      loader.classList.remove('hidden');
+    }
   },
   hide: () => {
-    document.getElementById('loading-overlay').classList.add('hidden');
+    const loader = document.getElementById('loading-overlay');
+    if (loader) loader.classList.add('hidden');
   }
 };
 
 // --- 3. متغیرهای سراسری ---
 let LICENSE = localStorage.getItem('license');
 let CONFIG = JSON.parse(localStorage.getItem('config') || '{}');
+// لیست موقت برای داده‌های پیوسته (قبل از تجمیع)
+let tempContinuousData = [];
 
 // --- 4. رندر کننده صفحات (UI) ---
 const UI = {
@@ -93,15 +102,16 @@ const UI = {
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
           <button id="btn-rec" onclick="Timer.record()" disabled class="btn btn-primary">🚩 ثبت</button>
           <button id="btn-start" onclick="Timer.start()" class="btn btn-success">▶ شروع</button>
-          <button id="btn-save" onclick="Timer.finish('workstation')" disabled class="btn btn-danger">💾 پایان</button>
+          <button id="btn-save" onclick="Timer.finishWorkstation()" disabled class="btn btn-danger">💾 پایان</button>
         </div>
         <div id="laps-list" style="margin-top:20px; max-height:200px; overflow-y:auto;"></div>
       </div>
     `;
-    restoreSelects();
+    restoreSelects(); // بازیابی انتخاب‌ها
   },
 
   renderContinuous: () => {
+    tempContinuousData = []; // هنگام ورود، لیست موقت خالی شود
     document.getElementById('app-root').innerHTML = `
       <div class="view active">
         <div class="header-row">
@@ -112,44 +122,61 @@ const UI = {
         <div class="timer-box" style="background:#fffbf0; border-color:#fbbc04;">
           <div class="timer-display" id="display" style="color:#f57c00;">00:00.00</div>
         </div>
+        
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
           <button id="btn-stop" onclick="Timer.stop()" disabled class="btn btn-danger">⏸ توقف</button>
           <button id="btn-start" onclick="Timer.start(true)" class="btn btn-success">▶ شروع</button>
           <button onclick="Timer.reset()" class="btn btn-gray">⏹ ریست</button>
         </div>
-        <input type="number" id="prod-count" placeholder="تعداد تولید شده" style="margin-top:20px;">
-        <button onclick="Timer.finish('continuous')" class="btn btn-primary">💾 ذخیره اطلاعات</button>
+
+        <!-- بخش ثبت موقت سیکل -->
+        <div style="background:#f9f9f9; padding:15px; border-radius:10px; margin-top:20px; border:1px solid #eee;">
+          <label style="font-size:0.9rem; font-weight:bold;">تعداد تولید در این سیکل:</label>
+          <div style="display:flex; gap:10px; margin-top:5px;">
+            <input type="number" id="prod-count" placeholder="0" style="margin:0;">
+            <button onclick="Timer.addContinuousCycle()" class="btn btn-secondary" style="width:auto; padding:0 20px; margin:0;">➕ افزودن</button>
+          </div>
+        </div>
+
+        <!-- لیست سیکل‌های ثبت شده -->
+        <div id="cycle-list" style="margin-top:15px; max-height:150px; overflow-y:auto; border-top:1px solid #eee;"></div>
+
+        <!-- دکمه ارسال نهایی (تجمیع) -->
+        <button id="btn-final-send" onclick="Timer.finishContinuous()" class="btn btn-primary" style="margin-top:20px;" disabled>📤 تجمیع و ارسال نهایی</button>
       </div>
     `;
-    restoreSelects();
+    restoreSelects(); // بازیابی انتخاب‌ها
   },
   
   showSetupWizard: (data) => {
     document.getElementById('app-root').innerHTML = `
       <div class="view active" style="padding:30px; text-align:center;">
         <h2>🚀 راه‌اندازی اولیه</h2>
-        <p style="color:#666; margin-bottom:30px;">برای شروع، باید فایل دیتابیس خود را بسازید.</p>
+        <p style="color:#666; margin-bottom:30px;">برای شروع، فایل دیتابیس خود را بسازید.</p>
         <div style="background:#e3f2fd; padding:15px; border-radius:10px; margin-bottom:20px; text-align:right;">
-          <b>گام ۱:</b> روی دکمه زیر کلیک کنید تا فایل شما ساخته شود.<br>
-          <a href="${data.templateUrl}" target="_blank" class="btn btn-secondary" style="margin-top:10px;">📂 ساخت فایل دیتابیس</a>
+          <b>گام ۱:</b> فایل دیتابیس را بسازید (کپی در درایو شما):<br>
+          <a href="${data.templateUrl}" target="_blank" class="btn btn-secondary" style="margin-top:10px;">📂 ساخت فایل</a>
         </div>
         <div style="background:#fff3e0; padding:15px; border-radius:10px; margin-bottom:20px; text-align:right;">
-          <b>گام ۲:</b> فایل جدید را باز کنید، دکمه Share را بزنید و این ایمیل را <b>Editor</b> کنید:<br>
+          <b>گام ۲:</b> فایل را باز کنید و این ایمیل را <b>Editor</b> کنید:<br>
           <code style="display:block; background:#fff; padding:5px; margin:5px 0; border:1px solid #ccc; text-align:center;">${data.botEmail}</code>
         </div>
         <div style="background:#e8f5e9; padding:15px; border-radius:10px; text-align:right;">
-          <b>گام ۳:</b> آدرس (URL) فایل ساخته شده را اینجا وارد کنید و اتصال را بزنید:<br>
-          <input id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%; direction:ltr; margin-top:5px;">
-          <button onclick="completeSetup()" class="btn btn-primary">🔗 اتصال به سیستم</button>
+          <b>گام ۳:</b> آدرس فایل ساخته شده را وارد کنید:<br>
+          <input id="sheet-url" placeholder="https://docs.google.com/..." style="width:100%; direction:ltr; margin-top:5px;">
+          <button onclick="completeSetup()" class="btn btn-primary">🔗 اتصال</button>
         </div>
       </div>
     `;
   },
   
   showMaintenance: () => {
-    document.getElementById('maintenance-overlay').style.display = 'flex';
-    document.getElementById('app-root').style.display = 'none';
-    Loader.hide();
+    const maintOverlay = document.getElementById('maintenance-overlay');
+    if(maintOverlay) {
+        maintOverlay.style.display = 'flex';
+        document.getElementById('app-root').style.display = 'none';
+        Loader.hide();
+    }
   },
   
   showErrorPage: (title, msg) => {
@@ -158,7 +185,7 @@ const UI = {
         <h1 style="color:var(--danger); font-size:4rem;">⛔</h1>
         <h2 style="color:#333;">${title}</h2>
         <p style="color:#666;">${msg}</p>
-        <button class="btn btn-gray" onclick="logout()" style="width:auto; display:inline-block; margin-top:20px;">خروج و بازگشت</button>
+        <button class="btn btn-gray" onclick="logout()" style="width:auto; display:inline-block; margin-top:20px;">خروج</button>
       </div>
     `;
     Loader.hide();
@@ -176,10 +203,12 @@ function createSelects() {
   `;
 }
 
+// ذخیره وضعیت انتخاب‌ها در LocalStorage
 function saveSelectState(el) {
   localStorage.setItem('sel_' + el.id, el.value);
 }
 
+// بازیابی وضعیت انتخاب‌ها
 function restoreSelects() {
   ['s-shift', 's-oper', 's-prod', 's-stat'].forEach(id => {
     const val = localStorage.getItem('sel_' + id);
@@ -215,7 +244,7 @@ const Timer = {
     toggleBtns(false, true);
   },
 
-  record: () => {
+  record: () => { // کارگاهی: ثبت دور
     const sec = (Timer.elapsed / 1000).toFixed(2);
     Timer.laps.push(sec);
     const div = document.createElement('div');
@@ -234,31 +263,94 @@ const Timer = {
     updateDisplay(0);
   },
 
-  finish: async (type) => {
+  // پیوسته: افزودن به لیست موقت
+  addContinuousCycle: () => {
+    const countInput = document.getElementById('prod-count');
+    const count = parseInt(countInput.value);
+    
+    if (!count || count <= 0) return Alert.error("تعداد تولید را وارد کنید");
+    if (Timer.running) return Alert.error("ابتدا تایمر را متوقف کنید");
+    if (Timer.elapsed === 0) return Alert.error("زمانی ثبت نشده است");
+
+    const timeSec = parseFloat((Timer.elapsed / 1000).toFixed(2));
+    
+    // اضافه به لیست موقت
+    tempContinuousData.push({ time: timeSec, count: count });
+
+    // نمایش در UI
+    const list = document.getElementById('cycle-list');
+    const div = document.createElement('div');
+    div.className = 'lap-item';
+    div.style.borderLeftColor = '#fbbc04';
+    div.innerHTML = `<span>سیکل ${tempContinuousData.length}</span> <span>⏱️ ${timeSec}s</span> <span>📦 ${count}</span>`;
+    list.prepend(div);
+
+    // آماده‌سازی برای دور بعد
+    Timer.elapsed = 0; 
+    updateDisplay(0);
+    countInput.value = '';
+    
+    document.getElementById('btn-final-send').disabled = false;
+    Alert.success("سیکل افزوده شد");
+  },
+
+  // پیوسته: تجمیع و ارسال نهایی
+  finishContinuous: async () => {
+    if (tempContinuousData.length === 0) return Alert.error("هیچ داده‌ای ثبت نشده است");
     const data = getFormData();
     if(!data) return;
 
-    if(type === 'workstation') {
-      if(Timer.laps.length === 0) return Alert.error("زمانی ثبت نشده است!");
-      clearInterval(Timer.interval);
-      // ذخیره و پاک کردن فرم
-      saveData({ type, data: { ...data, times: Timer.laps } });
-      Timer.laps = []; Timer.elapsed = 0; Timer.running = false;
-      document.getElementById('laps-list').innerHTML = '';
-      updateDisplay(0);
-      toggleBtns(false, false);
-    } else {
-      const count = document.getElementById('prod-count').value;
-      if(!count) return Alert.error("تعداد تولید را وارد کنید");
-      const total = (Timer.elapsed / 1000).toFixed(2);
-      saveData({ type, data: { ...data, totalTime: total, count, rate: (total/count).toFixed(2) } });
-      
-      // فقط تایمر ریست میشه، فرم میمونه
-      Timer.reset();
-      document.getElementById('prod-count').value = '';
-    }
+    // محاسبات تجمیعی
+    let totalTime = 0;
+    let totalCount = 0;
     
-    await Alert.success("با موفقیت در صف ذخیره شد");
+    tempContinuousData.forEach(item => {
+      totalTime += item.time;
+      totalCount += item.count;
+    });
+
+    const finalRate = (totalTime / totalCount).toFixed(2);
+
+    // ذخیره در صف برای ارسال بچی
+    saveData({ 
+      type: 'continuous', 
+      data: { 
+        ...data, 
+        totalTime: totalTime.toFixed(2), 
+        count: totalCount, 
+        rate: finalRate 
+      } 
+    });
+
+    await Alert.success(`ثبت شد! \nمجموع زمان: ${totalTime.toFixed(2)} \nمجموع تعداد: ${totalCount}`);
+    
+    // پاکسازی لیست موقت و ریست تایمر
+    tempContinuousData = [];
+    document.getElementById('cycle-list').innerHTML = '';
+    document.getElementById('btn-final-send').disabled = true;
+    Timer.reset();
+    
+    // نکته مهم: فرم (سلکت‌ها) پاک نمی‌شود تا کاربر سریع ادامه دهد
+  },
+
+  // کارگاهی: پایان و ارسال
+  finishWorkstation: async () => {
+    const data = getFormData();
+    if(!data) return;
+    if(Timer.laps.length === 0) return Alert.error("زمانی ثبت نشده است!");
+    
+    clearInterval(Timer.interval);
+    // ذخیره در صف برای ارسال بچی
+    saveData({ type: 'workstation', data: { ...data, times: Timer.laps } });
+    
+    // ریست کامل تایمر و لپ‌ها
+    Timer.laps = []; Timer.elapsed = 0; Timer.running = false;
+    document.getElementById('laps-list').innerHTML = '';
+    updateDisplay(0);
+    toggleBtns(false, false);
+    
+    await Alert.success("با موفقیت ارسال شد");
+    UI.renderHome(); // بازگشت به خانه
   }
 };
 
@@ -302,7 +394,7 @@ function saveData(record) {
   q.push(record);
   localStorage.setItem('queue', JSON.stringify(q));
   
-  syncData();
+  syncData(); // تلاش برای ارسال فوری
 }
 
 async function syncData(manual = false) {
@@ -325,7 +417,7 @@ async function syncData(manual = false) {
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
-      body: JSON.stringify({ license: LICENSE, payload: q }),
+      body: JSON.stringify({ license: LICENSE, payload: q }), // ارسال کل صف (Batch)
       headers: { "Content-Type": "text/plain" }
     });
     const json = await res.json();
@@ -406,13 +498,11 @@ async function init() {
       const res = await fetch(`${API_URL}?license=${LICENSE}`);
       const json = await res.json();
       
-      // 1. بررسی وضعیت بروزرسانی (اولویت اول)
       if (json.status === 'maintenance') {
         UI.showMaintenance(json.message);
         return;
       }
       
-      // 2. بررسی Kill / Error
       if (json.status === 'kill' || json.status === 'error') {
         UI.showErrorPage("دسترسی مسدود شد", json.message);
         return;
@@ -430,7 +520,6 @@ async function init() {
         UI.renderHome();
       }
     } else {
-      // حالت آفلاین
       const cached = localStorage.getItem('config');
       if (cached) { 
         CONFIG = JSON.parse(cached); 
@@ -439,7 +528,11 @@ async function init() {
         UI.showErrorPage("اینترنت قطع است", "هیچ داده‌ای برای نمایش آفلاین وجود ندارد."); 
       }
     }
-  } catch(e) { console.log("Offline config load"); }
+  } catch(e) { 
+    const cached = localStorage.getItem('config');
+    if (cached) { CONFIG = JSON.parse(cached); UI.renderHome(); }
+    else UI.showErrorPage("خطای ارتباط", "امکان اتصال به سرور وجود ندارد.");
+  }
   
   Loader.hide();
   syncData();
