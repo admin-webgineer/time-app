@@ -1,7 +1,7 @@
 /* ... (فونت لوکال و متغیرها مثل قبل) ... */
 @font-face {
   font-family: 'MyLocalFont';
-  src: url('../fonts/Vazirmatn-Regular.woff2') format('woff2');
+  src: url('../fonts/Vazirmatn-RD[wght].woff2') format('woff2');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
