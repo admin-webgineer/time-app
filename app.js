@@ -1,0 +1,389 @@
+// ============================================
+// ⚠️ لینک اسکریپت خود را اینجا قرار دهید
+const API_URL = "https://script.google.com/macros/s/AKfycbwGTi5x558NO2dq_ylKfGKnfntdRW03eiBzAfpGfgrqZrFMLkWfnqEhPSE2mT8pCWNHdw/exec"; 
+// ============================================
+
+// --- 1. سیستم آلرت اختصاصی (بدون کتابخانه) ---
+const Alert = {
+  show: (title, message, icon = 'info', showCancel = false) => {
+    return new Promise((resolve) => {
+      const overlay = document.getElementById('custom-alert-overlay');
+      const titleEl = document.getElementById('alert-title');
+      const msgEl = document.getElementById('alert-message');
+      const iconEl = document.getElementById('alert-icon');
+      const okBtn = document.getElementById('alert-ok');
+      const cancelBtn = document.getElementById('alert-cancel');
+
+      const icons = { success: '✅', error: '⛔', warning: '⚠️', info: 'ℹ️' };
+      iconEl.textContent = icons[icon] || icons.info;
+      titleEl.textContent = title;
+      msgEl.textContent = message;
+
+      cancelBtn.classList.toggle('hidden', !showCancel);
+      
+      // کلون کردن دکمه‌ها برای حذف ایونت لیسنرهای قبلی
+      const newOk = okBtn.cloneNode(true);
+      const newCancel = cancelBtn.cloneNode(true);
+      okBtn.parentNode.replaceChild(newOk, okBtn);
+      cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+
+      newOk.addEventListener('click', () => { overlay.classList.add('hidden'); resolve(true); });
+      newCancel.addEventListener('click', () => { overlay.classList.add('hidden'); resolve(false); });
+
+      overlay.classList.remove('hidden');
+    });
+  },
+  success: (msg) => Alert.show('موفق', msg, 'success'),
+  error: (msg) => Alert.show('خطا', msg, 'error'),
+  confirm: (msg) => Alert.show('تایید', msg, 'warning', true)
+};
+
+// --- 2. سیستم لودینگ ---
+const Loader = {
+  show: (text = "لطفاً صبر کنید...") => {
+    document.querySelector('.loading-text').textContent = text;
+    document.getElementById('loading-overlay').classList.remove('hidden');
+  },
+  hide: () => {
+    document.getElementById('loading-overlay').classList.add('hidden');
+  }
+};
+
+// --- 3. متغیرهای سراسری ---
+let LICENSE = localStorage.getItem('license');
+let CONFIG = JSON.parse(localStorage.getItem('config') || '{}');
+
+// --- 4. رندر کننده صفحات (UI) ---
+const UI = {
+  renderHome: () => {
+    const app = document.getElementById('app-root');
+    const logoSrc = CONFIG.logoUrl || ''; 
+    const compName = CONFIG.companyName || 'سیستم زمان‌سنجی';
+    
+    app.innerHTML = `
+      <div class="view active">
+        <div style="text-align:center; margin-bottom:30px; margin-top:20px;">
+          ${logoSrc ? `<img src="${logoSrc}" class="company-logo">` : ''}
+          <h2 style="margin:0; color:#555;">${compName}</h2>
+        </div>
+        
+        <button class="btn btn-primary" onclick="UI.renderWorkstation()">🏭 زمان‌سنجی کارگاهی</button>
+        <button class="btn btn-secondary" onclick="UI.renderContinuous()">🔄 زمان‌سنجی پیوسته</button>
+        
+        <div style="margin-top:50px; text-align:center; font-size:0.85rem; color:#777;">
+          <p>کد مشتری: <b>${LICENSE}</b></p>
+          <div id="offline-status" style="margin-bottom:10px;">صف ارسال: ${getQueueLength()}</div>
+          <button onclick="syncData(true)" class="btn btn-gray" style="width:auto; display:inline-flex; padding:8px 20px; font-size:0.8rem;">🔄 ارسال دستی</button>
+          <br><br>
+          <a href="#" onclick="logout()" style="color:var(--danger); text-decoration:none;">خروج از حساب</a>
+        </div>
+      </div>
+    `;
+  },
+
+  renderWorkstation: () => {
+    document.getElementById('app-root').innerHTML = `
+      <div class="view active">
+        <div class="header-row">
+          <button onclick="UI.renderHome()" class="btn btn-gray" style="width:auto; padding:8px 15px;">🏠</button>
+          <h3 style="margin:0;">کارگاهی</h3>
+        </div>
+        ${createSelects()}
+        <div class="timer-box">
+          <div class="timer-display" id="display">00:00.00</div>
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+          <button id="btn-rec" onclick="Timer.record()" disabled class="btn btn-primary">🚩 ثبت</button>
+          <button id="btn-start" onclick="Timer.start()" class="btn btn-success">▶ شروع</button>
+          <button id="btn-save" onclick="Timer.finish('workstation')" disabled class="btn btn-danger">💾 پایان</button>
+        </div>
+        <div id="laps-list" style="margin-top:20px; max-height:200px; overflow-y:auto;"></div>
+      </div>
+    `;
+  },
+
+  renderContinuous: () => {
+    document.getElementById('app-root').innerHTML = `
+      <div class="view active">
+        <div class="header-row">
+          <button onclick="UI.renderHome()" class="btn btn-gray" style="width:auto; padding:8px 15px;">🏠</button>
+          <h3 style="margin:0;">پیوسته</h3>
+        </div>
+        ${createSelects()}
+        <div class="timer-box" style="background:#fffbf0; border-color:#fbbc04;">
+          <div class="timer-display" id="display" style="color:#f57c00;">00:00.00</div>
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+          <button id="btn-stop" onclick="Timer.stop()" disabled class="btn btn-danger">⏸ توقف</button>
+          <button id="btn-start" onclick="Timer.start(true)" class="btn btn-success">▶ شروع</button>
+          <button onclick="Timer.reset()" class="btn btn-gray">⏹ ریست</button>
+        </div>
+        <input type="number" id="prod-count" placeholder="تعداد تولید شده" style="margin-top:20px;">
+        <button onclick="Timer.finish('continuous')" class="btn btn-primary">💾 ذخیره اطلاعات</button>
+      </div>
+    `;
+  },
+  
+  showSetupWizard: (data) => {
+    document.getElementById('app-root').innerHTML = `
+      <div class="view active" style="padding:30px; text-align:center;">
+        <h2>🚀 راه‌اندازی اولیه</h2>
+        <p style="color:#666; margin-bottom:30px;">خوش آمدید! برای شروع، باید فایل دیتابیس خود را بسازید.</p>
+        
+        <div style="background:#e3f2fd; padding:15px; border-radius:10px; margin-bottom:20px; text-align:right;">
+          <b>گام ۱:</b> روی دکمه زیر کلیک کنید تا فایل شما ساخته شود. (یک کپی در گوگل درایو شما ایجاد می‌شود)<br>
+          <a href="${data.templateUrl}" target="_blank" class="btn btn-secondary" style="margin-top:10px;">📂 ساخت فایل دیتابیس</a>
+        </div>
+
+        <div style="background:#fff3e0; padding:15px; border-radius:10px; margin-bottom:20px; text-align:right;">
+          <b>گام ۲:</b> فایل جدید را باز کنید، دکمه Share را بزنید و این ایمیل را <b>Editor</b> کنید:<br>
+          <code style="display:block; background:#fff; padding:5px; margin:5px 0; border:1px solid #ccc; text-align:center;">${data.botEmail}</code>
+        </div>
+
+        <div style="background:#e8f5e9; padding:15px; border-radius:10px; text-align:right;">
+          <b>گام ۳:</b> آدرس (URL) فایل ساخته شده را اینجا وارد کنید و اتصال را بزنید:<br>
+          <input id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%; direction:ltr; margin-top:5px;">
+          <button onclick="completeSetup()" class="btn btn-primary">🔗 اتصال به سیستم</button>
+        </div>
+      </div>
+    `;
+  }
+};
+
+function createSelects() {
+  const mkOpt = (list) => list ? list.map(i => `<option value="${i}">${i}</option>`).join('') : '';
+  return `
+    <select id="s-shift"><option value="">انتخاب شیفت...</option>${mkOpt(CONFIG.shifts)}</select>
+    <select id="s-oper"><option value="">انتخاب اپراتور...</option>${mkOpt(CONFIG.operators)}</select>
+    <select id="s-prod"><option value="">انتخاب محصول...</option>${mkOpt(CONFIG.products)}</select>
+    <select id="s-stat"><option value="">انتخاب ایستگاه...</option>${mkOpt(CONFIG.stations)}</select>
+  `;
+}
+
+// --- 5. منطق تایمر ---
+const Timer = {
+  interval: null,
+  startTime: 0,
+  elapsed: 0,
+  laps: [],
+  running: false,
+
+  start: (isContinuous = false) => {
+    if(Timer.running) return;
+    Timer.startTime = Date.now() - Timer.elapsed;
+    Timer.interval = setInterval(() => {
+      Timer.elapsed = Date.now() - Timer.startTime;
+      updateDisplay(Timer.elapsed);
+    }, 10);
+    Timer.running = true;
+    toggleBtns(true, isContinuous);
+  },
+
+  stop: () => {
+    clearInterval(Timer.interval);
+    Timer.running = false;
+    toggleBtns(false, true);
+  },
+
+  record: () => {
+    const sec = (Timer.elapsed / 1000).toFixed(2);
+    Timer.laps.push(sec);
+    const div = document.createElement('div');
+    div.className = 'lap-item';
+    div.innerHTML = `<span>دور ${Timer.laps.length}</span> <b>${sec}s</b>`;
+    document.getElementById('laps-list').prepend(div);
+    
+    Timer.elapsed = 0;
+    Timer.startTime = Date.now();
+    updateDisplay(0);
+  },
+
+  reset: () => {
+    Timer.stop();
+    Timer.elapsed = 0;
+    updateDisplay(0);
+  },
+
+  finish: async (type) => {
+    const data = getFormData();
+    if(!data) return;
+
+    if(type === 'workstation') {
+      if(Timer.laps.length === 0) return Alert.error("زمانی ثبت نشده است!");
+      clearInterval(Timer.interval);
+      saveData({ type, data: { ...data, times: Timer.laps } });
+    } else {
+      const count = document.getElementById('prod-count').value;
+      if(!count) return Alert.error("تعداد تولید را وارد کنید");
+      const total = (Timer.elapsed / 1000).toFixed(2);
+      saveData({ type, data: { ...data, totalTime: total, count, rate: (total/count).toFixed(2) } });
+    }
+    
+    await Alert.success("با موفقیت در صف ذخیره شد");
+    Timer.laps = []; Timer.elapsed = 0; Timer.running = false;
+    UI.renderHome();
+  }
+};
+
+function updateDisplay(ms) {
+  const s = Math.floor(ms/1000);
+  const m = Math.floor(s/60);
+  const msShow = Math.floor((ms%1000)/10);
+  document.getElementById('display').innerText = 
+    `${String(m).padStart(2,'0')}:${String(s%60).padStart(2,'0')}.${String(msShow).padStart(2,'0')}`;
+}
+
+function toggleBtns(running, isCon) {
+  if(isCon) {
+    document.getElementById('btn-start').disabled = running;
+    document.getElementById('btn-stop').disabled = !running;
+  } else {
+    document.getElementById('btn-start').disabled = running;
+    document.getElementById('btn-rec').disabled = !running;
+    document.getElementById('btn-save').disabled = !running;
+  }
+}
+
+function getFormData() {
+  const shift = document.getElementById('s-shift').value;
+  if(!shift) { Alert.error("لطفا تمام فیلدها را انتخاب کنید"); return null; }
+  return {
+    shift,
+    operator: document.getElementById('s-oper').value,
+    product: document.getElementById('s-prod').value,
+    station: document.getElementById('s-stat').value
+  };
+}
+
+// --- 6. مدیریت داده و آفلاین ---
+function saveData(record) {
+  record.id = Date.now();
+  record.license = LICENSE;
+  record.timestamp = new Date().toISOString();
+  
+  let q = JSON.parse(localStorage.getItem('queue') || '[]');
+  q.push(record);
+  localStorage.setItem('queue', JSON.stringify(q));
+  syncData();
+}
+
+async function syncData(manual = false) {
+  const statusEl = document.getElementById('offline-status');
+  if(!navigator.onLine) { 
+    if(statusEl) statusEl.innerText = `صف ارسال: ${getQueueLength()} (آفلاین)`;
+    return; 
+  }
+  
+  let q = JSON.parse(localStorage.getItem('queue') || '[]');
+  if(q.length === 0) {
+    if(statusEl) statusEl.innerText = "همگام‌سازی شده ✅";
+    if(manual) Alert.success("همه داده‌ها قبلاً ارسال شده‌اند.");
+    return;
+  }
+
+  if(manual) Loader.show("در حال ارسال داده‌ها...");
+  
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ license: LICENSE, payload: q }),
+      headers: { "Content-Type": "text/plain" }
+    });
+    const json = await res.json();
+    
+    if(json.status === 'success') {
+      localStorage.setItem('queue', '[]');
+      if(manual) { Loader.hide(); Alert.success("ارسال موفقیت‌آمیز بود!"); }
+      if(statusEl) statusEl.innerText = "همگام‌سازی شده ✅";
+    } else { throw new Error(json.message); }
+  } catch(e) {
+    if(manual) { Loader.hide(); Alert.error("خطا در ارسال: " + e.message); }
+  }
+}
+
+// --- 7. منطق اتصال (Setup Logic) ---
+async function completeSetup() {
+  const url = document.getElementById('sheet-url').value;
+  if (!url.includes('docs.google.com')) return Alert.error("لینک فایل معتبر نیست!");
+
+  Loader.show("در حال اتصال...");
+  try {
+    const res = await fetch(`${API_URL}?license=${LICENSE}&op=connect_sheet&sheet_url=${encodeURIComponent(url)}`);
+    const json = await res.json();
+    
+    if (json.status === 'success') {
+      await Alert.success("اتصال برقرار شد! سیستم آماده است.");
+      location.reload(); // رفرش برای ورود به اپ اصلی
+    } else {
+      Alert.error(json.message);
+    }
+  } catch (e) { Alert.error("خطا در ارتباط: " + e.message); }
+  Loader.hide();
+}
+
+async function init() {
+  if (API_URL.includes("YOUR_SCRIPT_URL")) {
+    Alert.error("لینک اسکریپت تنظیم نشده است!"); return;
+  }
+
+  const params = new URLSearchParams(location.search);
+  const urlLic = params.get('license');
+  if(urlLic) {
+    LICENSE = urlLic.toUpperCase();
+    localStorage.setItem('license', LICENSE);
+  }
+
+  if(!LICENSE) {
+    document.body.innerHTML = `
+      <div style="display:flex; height:100vh; justify-content:center; align-items:center; flex-direction:column; padding:20px; text-align:center;">
+        <h2>🔑 ورود به سیستم</h2>
+        <input id="l-in" placeholder="کد لایسنس شرکت" style="padding:15px; width:100%; max-width:280px; margin-bottom:15px; border-radius:10px; border:1px solid #ccc; font-family:inherit; text-align:center;">
+        <button class="btn btn-primary" style="max-width:280px;" onclick="setLic()">تایید و ورود</button>
+      </div>
+    `;
+    window.setLic = () => {
+      const v = document.getElementById('l-in').value.trim().toUpperCase();
+      if(v) { localStorage.setItem('license', v); location.href = '?license='+v; }
+      else Alert.error("لطفاً کد را وارد کنید");
+    };
+    return;
+  }
+
+  Loader.show("دریافت تنظیمات...");
+  try {
+    if(navigator.onLine) {
+      const res = await fetch(`${API_URL}?license=${LICENSE}`);
+      const json = await res.json();
+      
+      if (json.status === 'setup_required') {
+        UI.showSetupWizard(json); // نمایش ویزارد
+        Loader.hide();
+        return;
+      }
+      
+      if(json.status === 'success') {
+        CONFIG = json.data;
+        localStorage.setItem('config', JSON.stringify(CONFIG));
+      } else if(json.status === 'kill') {
+        document.body.innerHTML = `<div style="text-align:center; padding:50px;"><h1 style="color:red;">⛔ دسترسی مسدود است</h1><p>${json.message}</p><button class="btn btn-gray" onclick="logout()">خروج</button></div>`;
+        Loader.hide();
+        return;
+      }
+    }
+  } catch(e) { console.log("Offline config load"); }
+  
+  Loader.hide();
+  UI.renderHome();
+  syncData();
+}
+
+function logout() {
+  Alert.confirm("آیا می‌خواهید خارج شوید؟").then(res => {
+    if(res) { localStorage.clear(); location.href = location.pathname; }
+  });
+}
+
+function getQueueLength() { return JSON.parse(localStorage.getItem('queue') || '[]').length; }
+
+// شروع برنامه
+init();
