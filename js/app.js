@@ -1,9 +1,8 @@
 // ============================================
-// ⚠️ لینک اسکریپت خود را اینجا قرار دهید
 const API_URL = "https://script.google.com/macros/s/AKfycbwGTi5x558NO2dq_ylKfGKnfntdRW03eiBzAfpGfgrqZrFMLkWfnqEhPSE2mT8pCWNHdw/exec"; 
 // ============================================
 
-// --- 1. سیستم آلرت اختصاصی (بدون کتابخانه) ---
+// --- 1. سیستم آلرت اختصاصی ---
 const Alert = {
   show: (title, message, icon = 'info', showCancel = false) => {
     return new Promise((resolve) => {
@@ -21,7 +20,6 @@ const Alert = {
 
       cancelBtn.classList.toggle('hidden', !showCancel);
       
-      // کلون کردن دکمه‌ها برای حذف ایونت لیسنرهای قبلی
       const newOk = okBtn.cloneNode(true);
       const newCancel = cancelBtn.cloneNode(true);
       okBtn.parentNode.replaceChild(newOk, okBtn);
@@ -100,7 +98,6 @@ const UI = {
         <div id="laps-list" style="margin-top:20px; max-height:200px; overflow-y:auto;"></div>
       </div>
     `;
-    // بازیابی مقادیر قبلی سلکت‌ها
     restoreSelects();
   },
 
@@ -124,7 +121,6 @@ const UI = {
         <button onclick="Timer.finish('continuous')" class="btn btn-primary">💾 ذخیره اطلاعات</button>
       </div>
     `;
-    // بازیابی مقادیر قبلی سلکت‌ها
     restoreSelects();
   },
   
@@ -132,18 +128,15 @@ const UI = {
     document.getElementById('app-root').innerHTML = `
       <div class="view active" style="padding:30px; text-align:center;">
         <h2>🚀 راه‌اندازی اولیه</h2>
-        <p style="color:#666; margin-bottom:30px;">خوش آمدید! برای شروع، باید فایل دیتابیس خود را بسازید.</p>
-        
+        <p style="color:#666; margin-bottom:30px;">برای شروع، باید فایل دیتابیس خود را بسازید.</p>
         <div style="background:#e3f2fd; padding:15px; border-radius:10px; margin-bottom:20px; text-align:right;">
           <b>گام ۱:</b> روی دکمه زیر کلیک کنید تا فایل شما ساخته شود.<br>
           <a href="${data.templateUrl}" target="_blank" class="btn btn-secondary" style="margin-top:10px;">📂 ساخت فایل دیتابیس</a>
         </div>
-
         <div style="background:#fff3e0; padding:15px; border-radius:10px; margin-bottom:20px; text-align:right;">
           <b>گام ۲:</b> فایل جدید را باز کنید، دکمه Share را بزنید و این ایمیل را <b>Editor</b> کنید:<br>
           <code style="display:block; background:#fff; padding:5px; margin:5px 0; border:1px solid #ccc; text-align:center;">${data.botEmail}</code>
         </div>
-
         <div style="background:#e8f5e9; padding:15px; border-radius:10px; text-align:right;">
           <b>گام ۳:</b> آدرس (URL) فایل ساخته شده را اینجا وارد کنید و اتصال را بزنید:<br>
           <input id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%; direction:ltr; margin-top:5px;">
@@ -157,12 +150,23 @@ const UI = {
     document.getElementById('maintenance-overlay').style.display = 'flex';
     document.getElementById('app-root').style.display = 'none';
     Loader.hide();
+  },
+  
+  showErrorPage: (title, msg) => {
+    document.body.innerHTML = `
+      <div style="text-align:center; padding:50px; font-family:Tahoma;">
+        <h1 style="color:var(--danger); font-size:4rem;">⛔</h1>
+        <h2 style="color:#333;">${title}</h2>
+        <p style="color:#666;">${msg}</p>
+        <button class="btn btn-gray" onclick="logout()" style="width:auto; display:inline-block; margin-top:20px;">خروج و بازگشت</button>
+      </div>
+    `;
+    Loader.hide();
   }
 };
 
 function createSelects() {
   const mkOpt = (list) => list ? list.map(i => `<option value="${i}">${i}</option>`).join('') : '';
-  // اضافه کردن رویداد onchange برای ذخیره وضعیت انتخابی
   const onChange = `onchange="saveSelectState(this)"`;
   return `
     <select id="s-shift" ${onChange}><option value="">انتخاب شیفت...</option>${mkOpt(CONFIG.shifts)}</select>
@@ -172,12 +176,10 @@ function createSelects() {
   `;
 }
 
-// ذخیره وضعیت انتخاب شده در حافظه موقت (برای اینکه با رفت و برگشت نپرد)
 function saveSelectState(el) {
   localStorage.setItem('sel_' + el.id, el.value);
 }
 
-// بازیابی وضعیت انتخاب شده
 function restoreSelects() {
   ['s-shift', 's-oper', 's-prod', 's-stat'].forEach(id => {
     const val = localStorage.getItem('sel_' + id);
@@ -239,9 +241,8 @@ const Timer = {
     if(type === 'workstation') {
       if(Timer.laps.length === 0) return Alert.error("زمانی ثبت نشده است!");
       clearInterval(Timer.interval);
+      // ذخیره و پاک کردن فرم
       saveData({ type, data: { ...data, times: Timer.laps } });
-      
-      // فقط تایمر و لیست لپ‌ها رو ریست می‌کنیم، فرم می‌مونه
       Timer.laps = []; Timer.elapsed = 0; Timer.running = false;
       document.getElementById('laps-list').innerHTML = '';
       updateDisplay(0);
@@ -252,13 +253,12 @@ const Timer = {
       const total = (Timer.elapsed / 1000).toFixed(2);
       saveData({ type, data: { ...data, totalTime: total, count, rate: (total/count).toFixed(2) } });
       
-      // ریست تایمر و ورودی تعداد، فرم انتخاب‌ها می‌مونه (تغییر مهم)
+      // فقط تایمر ریست میشه، فرم میمونه
       Timer.reset();
       document.getElementById('prod-count').value = '';
     }
     
     await Alert.success("با موفقیت در صف ذخیره شد");
-    // اینجا دیگر به صفحه اصلی برنمی‌گردیم تا کاربر بتواند ادامه دهد
   }
 };
 
@@ -292,7 +292,7 @@ function getFormData() {
   };
 }
 
-// --- 6. مدیریت داده و آفلاین ---
+// --- 6. مدیریت داده و آفلاین (Batch) ---
 function saveData(record) {
   record.id = Date.now();
   record.license = LICENSE;
@@ -302,7 +302,6 @@ function saveData(record) {
   q.push(record);
   localStorage.setItem('queue', JSON.stringify(q));
   
-  // تلاش برای همگام‌سازی بلافاصله (برای تجربه بهتر)
   syncData();
 }
 
@@ -326,7 +325,7 @@ async function syncData(manual = false) {
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
-      body: JSON.stringify({ license: LICENSE, payload: q }), // ارسال بچی (کل آرایه q)
+      body: JSON.stringify({ license: LICENSE, payload: q }),
       headers: { "Content-Type": "text/plain" }
     });
     const json = await res.json();
@@ -365,7 +364,7 @@ async function completeSetup() {
 
     if (json.status === 'success') {
       await Alert.success("اتصال برقرار شد! سیستم آماده است.");
-      location.reload(); // رفرش برای ورود به اپ اصلی
+      location.reload(); 
     } else {
       Alert.error(json.message);
     }
@@ -409,12 +408,18 @@ async function init() {
       
       // 1. بررسی وضعیت بروزرسانی (اولویت اول)
       if (json.status === 'maintenance') {
-        UI.showMaintenance();
+        UI.showMaintenance(json.message);
+        return;
+      }
+      
+      // 2. بررسی Kill / Error
+      if (json.status === 'kill' || json.status === 'error') {
+        UI.showErrorPage("دسترسی مسدود شد", json.message);
         return;
       }
       
       if (json.status === 'setup_required') {
-        UI.showSetupWizard(json); // نمایش ویزارد
+        UI.showSetupWizard(json); 
         Loader.hide();
         return;
       }
@@ -422,16 +427,21 @@ async function init() {
       if (json.status === 'success') {
         CONFIG = json.data;
         localStorage.setItem('config', JSON.stringify(CONFIG));
-      } else if(json.status === 'kill') {
-        document.body.innerHTML = `<div style="text-align:center; padding:50px;"><h1 style="color:red;">⛔ دسترسی مسدود است</h1><p>${json.message}</p><button class="btn btn-gray" onclick="logout()">خروج</button></div>`;
-        Loader.hide();
-        return;
+        UI.renderHome();
+      }
+    } else {
+      // حالت آفلاین
+      const cached = localStorage.getItem('config');
+      if (cached) { 
+        CONFIG = JSON.parse(cached); 
+        UI.renderHome(); 
+      } else { 
+        UI.showErrorPage("اینترنت قطع است", "هیچ داده‌ای برای نمایش آفلاین وجود ندارد."); 
       }
     }
   } catch(e) { console.log("Offline config load"); }
   
   Loader.hide();
-  UI.renderHome();
   syncData();
 }
 
