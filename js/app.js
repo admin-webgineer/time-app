@@ -100,6 +100,8 @@ const UI = {
         <div id="laps-list" style="margin-top:20px; max-height:200px; overflow-y:auto;"></div>
       </div>
     `;
+    // بازیابی مقادیر قبلی سلکت‌ها
+    restoreSelects();
   },
 
   renderContinuous: () => {
@@ -122,6 +124,8 @@ const UI = {
         <button onclick="Timer.finish('continuous')" class="btn btn-primary">💾 ذخیره اطلاعات</button>
       </div>
     `;
+    // بازیابی مقادیر قبلی سلکت‌ها
+    restoreSelects();
   },
   
   showSetupWizard: (data) => {
@@ -131,7 +135,7 @@ const UI = {
         <p style="color:#666; margin-bottom:30px;">خوش آمدید! برای شروع، باید فایل دیتابیس خود را بسازید.</p>
         
         <div style="background:#e3f2fd; padding:15px; border-radius:10px; margin-bottom:20px; text-align:right;">
-          <b>گام ۱:</b> روی دکمه زیر کلیک کنید تا فایل شما ساخته شود. (یک کپی در گوگل درایو شما ایجاد می‌شود)<br>
+          <b>گام ۱:</b> روی دکمه زیر کلیک کنید تا فایل شما ساخته شود.<br>
           <a href="${data.templateUrl}" target="_blank" class="btn btn-secondary" style="margin-top:10px;">📂 ساخت فایل دیتابیس</a>
         </div>
 
@@ -147,17 +151,41 @@ const UI = {
         </div>
       </div>
     `;
+  },
+  
+  showMaintenance: () => {
+    document.getElementById('maintenance-overlay').style.display = 'flex';
+    document.getElementById('app-root').style.display = 'none';
+    Loader.hide();
   }
 };
 
 function createSelects() {
   const mkOpt = (list) => list ? list.map(i => `<option value="${i}">${i}</option>`).join('') : '';
+  // اضافه کردن رویداد onchange برای ذخیره وضعیت انتخابی
+  const onChange = `onchange="saveSelectState(this)"`;
   return `
-    <select id="s-shift"><option value="">انتخاب شیفت...</option>${mkOpt(CONFIG.shifts)}</select>
-    <select id="s-oper"><option value="">انتخاب اپراتور...</option>${mkOpt(CONFIG.operators)}</select>
-    <select id="s-prod"><option value="">انتخاب محصول...</option>${mkOpt(CONFIG.products)}</select>
-    <select id="s-stat"><option value="">انتخاب ایستگاه...</option>${mkOpt(CONFIG.stations)}</select>
+    <select id="s-shift" ${onChange}><option value="">انتخاب شیفت...</option>${mkOpt(CONFIG.shifts)}</select>
+    <select id="s-oper" ${onChange}><option value="">انتخاب اپراتور...</option>${mkOpt(CONFIG.operators)}</select>
+    <select id="s-prod" ${onChange}><option value="">انتخاب محصول...</option>${mkOpt(CONFIG.products)}</select>
+    <select id="s-stat" ${onChange}><option value="">انتخاب ایستگاه...</option>${mkOpt(CONFIG.stations)}</select>
   `;
+}
+
+// ذخیره وضعیت انتخاب شده در حافظه موقت (برای اینکه با رفت و برگشت نپرد)
+function saveSelectState(el) {
+  localStorage.setItem('sel_' + el.id, el.value);
+}
+
+// بازیابی وضعیت انتخاب شده
+function restoreSelects() {
+  ['s-shift', 's-oper', 's-prod', 's-stat'].forEach(id => {
+    const val = localStorage.getItem('sel_' + id);
+    if(val) {
+      const el = document.getElementById(id);
+      if(el) el.value = val;
+    }
+  });
 }
 
 // --- 5. منطق تایمر ---
@@ -212,16 +240,25 @@ const Timer = {
       if(Timer.laps.length === 0) return Alert.error("زمانی ثبت نشده است!");
       clearInterval(Timer.interval);
       saveData({ type, data: { ...data, times: Timer.laps } });
+      
+      // فقط تایمر و لیست لپ‌ها رو ریست می‌کنیم، فرم می‌مونه
+      Timer.laps = []; Timer.elapsed = 0; Timer.running = false;
+      document.getElementById('laps-list').innerHTML = '';
+      updateDisplay(0);
+      toggleBtns(false, false);
     } else {
       const count = document.getElementById('prod-count').value;
       if(!count) return Alert.error("تعداد تولید را وارد کنید");
       const total = (Timer.elapsed / 1000).toFixed(2);
       saveData({ type, data: { ...data, totalTime: total, count, rate: (total/count).toFixed(2) } });
+      
+      // ریست تایمر و ورودی تعداد، فرم انتخاب‌ها می‌مونه (تغییر مهم)
+      Timer.reset();
+      document.getElementById('prod-count').value = '';
     }
     
     await Alert.success("با موفقیت در صف ذخیره شد");
-    Timer.laps = []; Timer.elapsed = 0; Timer.running = false;
-    UI.renderHome();
+    // اینجا دیگر به صفحه اصلی برنمی‌گردیم تا کاربر بتواند ادامه دهد
   }
 };
 
@@ -264,6 +301,8 @@ function saveData(record) {
   let q = JSON.parse(localStorage.getItem('queue') || '[]');
   q.push(record);
   localStorage.setItem('queue', JSON.stringify(q));
+  
+  // تلاش برای همگام‌سازی بلافاصله (برای تجربه بهتر)
   syncData();
 }
 
@@ -282,14 +321,21 @@ async function syncData(manual = false) {
   }
 
   if(manual) Loader.show("در حال ارسال داده‌ها...");
+  else if(statusEl) statusEl.innerText = "در حال ارسال...";
   
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
-      body: JSON.stringify({ license: LICENSE, payload: q }),
+      body: JSON.stringify({ license: LICENSE, payload: q }), // ارسال بچی (کل آرایه q)
       headers: { "Content-Type": "text/plain" }
     });
     const json = await res.json();
+    
+    // مدیریت حالت بروزرسانی سیستم
+    if (json.status === 'maintenance') {
+      UI.showMaintenance();
+      return;
+    }
     
     if(json.status === 'success') {
       localStorage.setItem('queue', '[]');
@@ -298,6 +344,7 @@ async function syncData(manual = false) {
     } else { throw new Error(json.message); }
   } catch(e) {
     if(manual) { Loader.hide(); Alert.error("خطا در ارسال: " + e.message); }
+    if(statusEl) statusEl.innerText = "خطا در ارسال ❌";
   }
 }
 
@@ -311,6 +358,11 @@ async function completeSetup() {
     const res = await fetch(`${API_URL}?license=${LICENSE}&op=connect_sheet&sheet_url=${encodeURIComponent(url)}`);
     const json = await res.json();
     
+    if (json.status === 'maintenance') {
+      UI.showMaintenance();
+      return;
+    }
+
     if (json.status === 'success') {
       await Alert.success("اتصال برقرار شد! سیستم آماده است.");
       location.reload(); // رفرش برای ورود به اپ اصلی
@@ -355,13 +407,19 @@ async function init() {
       const res = await fetch(`${API_URL}?license=${LICENSE}`);
       const json = await res.json();
       
+      // 1. بررسی وضعیت بروزرسانی (اولویت اول)
+      if (json.status === 'maintenance') {
+        UI.showMaintenance();
+        return;
+      }
+      
       if (json.status === 'setup_required') {
         UI.showSetupWizard(json); // نمایش ویزارد
         Loader.hide();
         return;
       }
       
-      if(json.status === 'success') {
+      if (json.status === 'success') {
         CONFIG = json.data;
         localStorage.setItem('config', JSON.stringify(CONFIG));
       } else if(json.status === 'kill') {
