@@ -6,8 +6,7 @@
   <title>سیستم زمان‌سنجی</title>
   <link rel="manifest" href="manifest.json">
   
-  <!-- کشینگ هوشمند -->
-  <script>var APP_VERSION = "1.0.6";</script>
+  <script>var APP_VERSION = "1.0.7";</script>
   
   <style>
     /* استایل صفحه بروزرسانی */
@@ -31,7 +30,7 @@
 </head>
 <body>
 
-  <!-- صفحه حالت تعمیرات/آپدیت -->
+  <!-- صفحه حالت تعمیرات -->
   <div id="maintenance-overlay">
     <div class="update-icon">🚀</div>
     <h2 class="update-title">در حال بروزرسانی سیستم</h2>
@@ -39,10 +38,10 @@
     <button class="btn-refresh" onclick="forceReload()">دریافت نسخه جدید</button>
   </div>
 
-  <!-- کانتینر لودینگ -->
-  <div id="loading-overlay" class="hidden">
-    <div class="custom-spinner"></div>
-    <p class="loading-text">...</p>
+  <!-- کانتینر لودینگ (پیش‌فرض نمایش داده می‌شود) -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <p class="loading-text">در حال بارگذاری...</p>
   </div>
 
   <!-- کانتینر آلرت -->
@@ -59,7 +58,7 @@
   </div>
 
   <!-- ریشه اپلیکیشن -->
-  <div id="app-root" class="app-container"></div>
+  <div id="app-root" class="app-container" style="display:none;"></div>
 
   <!-- لودر استایل و اسکریپت -->
   <script>

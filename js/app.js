@@ -3,11 +3,12 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbwGTi5x558NO2dq_ylKfGKnfntdRW03eiBzAfpGfgrqZrFMLkWfnqEhPSE2mT8pCWNHdw/exec"; 
 // ============================================
 
-// --- 1. سیستم آلرت اختصاصی (بدون کتابخانه) ---
 const Alert = {
   show: (title, message, icon = 'info', showCancel = false) => {
     return new Promise((resolve) => {
       const overlay = document.getElementById('custom-alert-overlay');
+      if (!overlay) return resolve(true);
+
       const titleEl = document.getElementById('alert-title');
       const msgEl = document.getElementById('alert-message');
       const iconEl = document.getElementById('alert-icon');
@@ -37,7 +38,6 @@ const Alert = {
   confirm: (msg) => Alert.show('تایید', msg, 'warning', true)
 };
 
-// --- 2. سیستم لودینگ (اصلاح شده) ---
 const Loader = {
   show: (text = "لطفاً صبر کنید...") => {
     const loader = document.getElementById('loading-overlay');
@@ -52,19 +52,17 @@ const Loader = {
   }
 };
 
-// --- 3. متغیرهای سراسری ---
 let LICENSE = localStorage.getItem('license');
 let CONFIG = JSON.parse(localStorage.getItem('config') || '{}');
-// لیست موقت برای داده‌های پیوسته
 let tempContinuousData = [];
 
-// --- 4. رندر کننده صفحات (UI) ---
 const UI = {
   renderHome: () => {
     const app = document.getElementById('app-root');
     const logoSrc = CONFIG.logoUrl || ''; 
     const compName = CONFIG.companyName || 'سیستم زمان‌سنجی';
     
+    app.style.display = 'flex'; // نمایش کانتینر اصلی
     app.innerHTML = `
       <div class="view active">
         <div style="text-align:center; margin-bottom:30px; margin-top:20px;">
@@ -78,7 +76,7 @@ const UI = {
         <div style="margin-top:50px; text-align:center; font-size:0.85rem; color:#777;">
           <p>کد مشتری: <b>${LICENSE}</b></p>
           <div id="offline-status" style="margin-bottom:10px;">صف ارسال: ${getQueueLength()}</div>
-          <button onclick="syncData(true)" class="btn btn-gray" style="width:auto; display:inline-flex; padding:8px 20px; font-size:0.8rem;">🔄 ارسال دستی (نیاز به رفرش)</button>
+          <button onclick="syncData(true)" class="btn btn-gray" style="width:auto; display:inline-flex; padding:8px 20px; font-size:0.8rem;">🔄 همگام‌سازی و رفرش</button>
           <br><br>
           <a href="#" onclick="logout()" style="color:var(--danger); text-decoration:none;">خروج از حساب</a>
         </div>
@@ -100,7 +98,6 @@ const UI = {
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
           <button id="btn-rec" onclick="Timer.record()" disabled class="btn btn-primary">🚩 ثبت</button>
           <button id="btn-start" onclick="Timer.start()" class="btn btn-success">▶ شروع</button>
-          <!-- دکمه پایان حالا نقش ارسال نهایی را دارد -->
           <button id="btn-save" onclick="Timer.finishWorkstation()" disabled class="btn btn-danger">📤 ارسال</button>
         </div>
         <div id="laps-list" style="margin-top:20px; max-height:200px; overflow-y:auto;"></div>
@@ -145,7 +142,9 @@ const UI = {
   },
   
   showSetupWizard: (data) => {
-    document.getElementById('app-root').innerHTML = `
+    const app = document.getElementById('app-root');
+    app.style.display = 'flex';
+    app.innerHTML = `
       <div class="view active" style="padding:30px; text-align:center;">
         <h2>🚀 راه‌اندازی اولیه</h2>
         <div style="background:#e3f2fd; padding:15px; border-radius:10px; margin-bottom:20px; text-align:right;">
@@ -172,6 +171,8 @@ const UI = {
   },
   
   showErrorPage: (title, msg) => {
+    const app = document.getElementById('app-root');
+    app.style.display = 'flex'; // نمایش کانتینر برای خطا
     document.body.innerHTML = `
       <div style="text-align:center; padding:50px; font-family:Tahoma;">
         <h1 style="color:var(--danger); font-size:4rem;">⛔</h1>
@@ -235,10 +236,7 @@ const Timer = {
     div.className = 'lap-item';
     div.innerHTML = `<span>دور ${Timer.laps.length}</span> <b>${sec}s</b>`;
     document.getElementById('laps-list').prepend(div);
-    
-    Timer.elapsed = 0;
-    Timer.startTime = Date.now();
-    updateDisplay(0);
+    Timer.elapsed = 0; Timer.startTime = Date.now(); updateDisplay(0);
   },
 
   reset: () => {
@@ -355,7 +353,8 @@ function saveData(record) {
   q.push(record);
   localStorage.setItem('queue', JSON.stringify(q));
   
-  syncData();
+  // سینک با پارامتر manual=true تا رفرش هم انجام شود
+  syncData(true);
 }
 
 async function syncData(manual = false) {
@@ -372,9 +371,9 @@ async function syncData(manual = false) {
     return;
   }
 
-  // نمایش لودینگ قبل از ارسال و رفرش
-  if(manual) Loader.show("در حال ارسال داده‌ها...");
-  else if(statusEl) statusEl.innerText = "در حال ارسال...";
+  // نمایش لودینگ
+  Loader.show("در حال ارسال داده‌ها...");
+  if(statusEl) statusEl.innerText = "در حال ارسال...";
   
   try {
     const res = await fetch(API_URL, {
@@ -393,20 +392,24 @@ async function syncData(manual = false) {
       localStorage.setItem('queue', '[]');
       if(statusEl) statusEl.innerText = "همگام‌سازی شده ✅";
       
-      // لاجیک رفرش: نمایش لودینگ، نمایش پیغام موفقیت و سپس رفرش صفحه
+      // اگر عملیات دستی بود یا از فرم‌ها صدا زده شده بود
       if(manual) { 
-        Loader.show("دریافت اطلاعات جدید..."); // تغییر متن لودینگ برای کاربر
-        await Alert.success("ارسال موفقیت‌آمیز بود!");
-        setTimeout(() => window.location.reload(), 500); 
+        Loader.hide();
+        await Alert.success("ارسال موفقیت‌آمیز بود! صفحه بروزرسانی می‌شود.");
+        
+        // نمایش لودینگ قبل از رفرش
+        Loader.show("بارگذاری مجدد...");
+        setTimeout(() => window.location.reload(), 1000); 
       }
     } else { throw new Error(json.message); }
   } catch(e) {
-    if(manual) { Loader.hide(); Alert.error("خطا در ارسال: " + e.message); }
+    Loader.hide();
+    if(manual) { Alert.error("خطا در ارسال: " + e.message); }
     if(statusEl) statusEl.innerText = "خطا در ارسال ❌";
   }
 }
 
-// ... (توابع completeSetup, init, logout, getQueueLength, loadConfig بدون تغییر) ...
+// ... (توابع completeSetup, init, logout, getQueueLength, loadConfig) ...
 async function completeSetup() {
   const url = document.getElementById('sheet-url').value;
   if (!url.includes('docs.google.com')) return Alert.error("لینک فایل معتبر نیست!");
@@ -444,6 +447,7 @@ async function init() {
   }
 
   if(!LICENSE) {
+    // صفحه لاگین
     document.body.innerHTML = `
       <div style="display:flex; height:100vh; justify-content:center; align-items:center; flex-direction:column; padding:20px; text-align:center;">
         <h2>🔑 ورود به سیستم</h2>
@@ -459,7 +463,9 @@ async function init() {
     return;
   }
 
-  Loader.show("دریافت تنظیمات...");
+  // **نمایش لودینگ در شروع کار** (چون در HTML هست، اینجا نیازی به show نیست اما محض اطمینان)
+  // اما چون در HTML پیش‌فرض نمایش داده می‌شود، اینجا باید آن را مخفی کنیم وقتی کار تمام شد.
+  
   try {
     if(navigator.onLine) {
       const res = await fetch(`${API_URL}?license=${LICENSE}`);
@@ -497,7 +503,7 @@ async function init() {
     }
   } catch(e) { console.log("Offline config load"); }
   
-  Loader.hide();
+  Loader.hide(); // مخفی کردن لودینگ اولیه
   syncData();
 }
 
