@@ -324,6 +324,9 @@ function saveData(record) {
   q.push(record);
   localStorage.setItem('queue', JSON.stringify(q));
   
+  // اطمینان از بسته بودن لودر قبل از سینک
+  Loader.hide();
+  
   syncData();
 }
 
@@ -341,6 +344,7 @@ async function syncData(manual = false) {
     return;
   }
 
+  // فقط اگر دستی باشد لودینگ نشان بده
   if(manual) Loader.show("در حال ارسال داده‌ها...");
   else if(statusEl) statusEl.innerText = "در حال ارسال...";
   
@@ -385,6 +389,9 @@ async function completeSetup() {
     const res = await fetch(`${API_URL}?license=${LICENSE}&op=connect_sheet&sheet_url=${encodeURIComponent(url)}`);
     const json = await res.json();
     
+    // FIX 1: مخفی کردن لودینگ قبل از نمایش آلرت موفقیت
+    Loader.hide(); 
+
     if (json.status === 'maintenance') {
       UI.showMaintenance();
       return;
@@ -392,13 +399,15 @@ async function completeSetup() {
 
     if (json.status === 'success') {
       await Alert.success("اتصال برقرار شد! سیستم آماده است.");
-      location.reload(); 
+      // FIX 2: جایگزینی رفرش صفحه با راه‌اندازی مجدد منطقی
+      init(); // فراخوانی مجدد تابع اولیه برای دریافت کانفیگ جدید
     } else {
       Alert.error(json.message);
     }
-  } catch (e) { Alert.error("خطا در ارتباط: " + e.message); }
-  // تغییر مهم: اطمینان از مخفی شدن لودینگ در هر حالت
-  Loader.hide();
+  } catch (e) { 
+    Loader.hide(); 
+    Alert.error("خطا در ارتباط: " + e.message); 
+  }
 }
 
 async function init() {
