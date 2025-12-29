@@ -1,11 +1,11 @@
-const CACHE_NAME = 'pwa-v2';
+const CACHE_NAME = 'pwa-v3';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './css/style.css',
   './js/app.js',
-  './fonts/Vazirmatn-Regular.woff2' // فونت‌ها را اگر در گیت‌هاب هستند اینجا اضافه کنید
+  './fonts/Vazirmatn-RD[wght].woff2' // فونت‌ها را اگر در گیت‌هاب هستند اینجا اضافه کنید
 ];
 
 self.addEventListener('install', e => {
