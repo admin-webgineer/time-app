@@ -62,7 +62,7 @@ const UI = {
     const logoSrc = CONFIG.logoUrl || ''; 
     const compName = CONFIG.companyName || 'سیستم زمان‌سنجی';
     
-    app.style.display = 'flex'; // نمایش کانتینر اصلی
+    app.style.display = 'flex';
     app.innerHTML = `
       <div class="view active">
         <div style="text-align:center; margin-bottom:30px; margin-top:20px;">
@@ -76,7 +76,7 @@ const UI = {
         <div style="margin-top:50px; text-align:center; font-size:0.85rem; color:#777;">
           <p>کد مشتری: <b>${LICENSE}</b></p>
           <div id="offline-status" style="margin-bottom:10px;">صف ارسال: ${getQueueLength()}</div>
-          <button onclick="syncData(true)" class="btn btn-gray" style="width:auto; display:inline-flex; padding:8px 20px; font-size:0.8rem;">🔄 همگام‌سازی و رفرش</button>
+          <button onclick="syncData(true)" class="btn btn-gray" style="width:auto; display:inline-flex; padding:8px 20px; font-size:0.8rem;">🔄 ارسال دستی</button>
           <br><br>
           <a href="#" onclick="logout()" style="color:var(--danger); text-decoration:none;">خروج از حساب</a>
         </div>
@@ -171,8 +171,6 @@ const UI = {
   },
   
   showErrorPage: (title, msg) => {
-    const app = document.getElementById('app-root');
-    app.style.display = 'flex'; // نمایش کانتینر برای خطا
     document.body.innerHTML = `
       <div style="text-align:center; padding:50px; font-family:Tahoma;">
         <h1 style="color:var(--danger); font-size:4rem;">⛔</h1>
@@ -206,11 +204,7 @@ function restoreSelects() {
 
 // --- 5. منطق تایمر ---
 const Timer = {
-  interval: null,
-  startTime: 0,
-  elapsed: 0,
-  laps: [],
-  running: false,
+  interval: null, startTime: 0, elapsed: 0, laps: [], running: false,
 
   start: (isContinuous = false) => {
     if(Timer.running) return;
@@ -223,11 +217,7 @@ const Timer = {
     toggleBtns(true, isContinuous);
   },
 
-  stop: () => {
-    clearInterval(Timer.interval);
-    Timer.running = false;
-    toggleBtns(false, true);
-  },
+  stop: () => { clearInterval(Timer.interval); Timer.running = false; toggleBtns(false, true); },
 
   record: () => {
     const sec = (Timer.elapsed / 1000).toFixed(2);
@@ -239,16 +229,11 @@ const Timer = {
     Timer.elapsed = 0; Timer.startTime = Date.now(); updateDisplay(0);
   },
 
-  reset: () => {
-    Timer.stop();
-    Timer.elapsed = 0;
-    updateDisplay(0);
-  },
+  reset: () => { Timer.stop(); Timer.elapsed = 0; updateDisplay(0); },
 
   addContinuousCycle: () => {
     const countInput = document.getElementById('prod-count');
     const count = parseInt(countInput.value);
-    
     if (!count || count <= 0) return Alert.error("تعداد تولید را وارد کنید");
     if (Timer.running) return Alert.error("ابتدا تایمر را متوقف کنید");
     if (Timer.elapsed === 0) return Alert.error("زمانی ثبت نشده است");
@@ -263,10 +248,7 @@ const Timer = {
     div.innerHTML = `<span>سیکل ${tempContinuousData.length}</span> <span>⏱️ ${timeSec}s</span> <span>📦 ${count}</span>`;
     list.prepend(div);
 
-    Timer.elapsed = 0; 
-    updateDisplay(0);
-    countInput.value = '';
-    
+    Timer.elapsed = 0; updateDisplay(0); countInput.value = '';
     document.getElementById('btn-final-send').disabled = false;
     Alert.success("سیکل افزوده شد");
   },
@@ -276,21 +258,13 @@ const Timer = {
     const data = getFormData();
     if(!data) return;
 
-    let totalTime = 0;
-    let totalCount = 0;
-    
-    tempContinuousData.forEach(item => {
-      totalTime += item.time;
-      totalCount += item.count;
-    });
-
+    let totalTime = 0, totalCount = 0;
+    tempContinuousData.forEach(item => { totalTime += item.time; totalCount += item.count; });
     const finalRate = (totalTime / totalCount).toFixed(2);
 
-    saveData({ 
-      type: 'continuous', 
-      data: { ...data, totalTime: totalTime.toFixed(2), count: totalCount, rate: finalRate } 
-    });
+    saveData({ type: 'continuous', data: { ...data, totalTime: totalTime.toFixed(2), count: totalCount, rate: finalRate } });
 
+    // ریست بدون رفرش
     tempContinuousData = [];
     document.getElementById('cycle-list').innerHTML = '';
     document.getElementById('btn-final-send').disabled = true;
@@ -303,9 +277,9 @@ const Timer = {
     if(Timer.laps.length === 0) return Alert.error("زمانی ثبت نشده است!");
     
     clearInterval(Timer.interval);
-    // ذخیره در صف و ارسال فوری
     saveData({ type: 'workstation', data: { ...data, times: Timer.laps } });
     
+    // ریست بدون رفرش
     Timer.laps = []; Timer.elapsed = 0; Timer.running = false;
     document.getElementById('laps-list').innerHTML = '';
     updateDisplay(0);
@@ -314,11 +288,8 @@ const Timer = {
 };
 
 function updateDisplay(ms) {
-  const s = Math.floor(ms/1000);
-  const m = Math.floor(s/60);
-  const msShow = Math.floor((ms%1000)/10);
-  document.getElementById('display').innerText = 
-    `${String(m).padStart(2,'0')}:${String(s%60).padStart(2,'0')}.${String(msShow).padStart(2,'0')}`;
+  const s = Math.floor(ms/1000); const m = Math.floor(s/60); const msShow = Math.floor((ms%1000)/10);
+  document.getElementById('display').innerText = `${String(m).padStart(2,'0')}:${String(s%60).padStart(2,'0')}.${String(msShow).padStart(2,'0')}`;
 }
 
 function toggleBtns(running, isCon) {
@@ -353,8 +324,7 @@ function saveData(record) {
   q.push(record);
   localStorage.setItem('queue', JSON.stringify(q));
   
-  // سینک با پارامتر manual=true تا رفرش هم انجام شود
-  syncData(true);
+  syncData();
 }
 
 async function syncData(manual = false) {
@@ -371,9 +341,8 @@ async function syncData(manual = false) {
     return;
   }
 
-  // نمایش لودینگ
-  Loader.show("در حال ارسال داده‌ها...");
-  if(statusEl) statusEl.innerText = "در حال ارسال...";
+  if(manual) Loader.show("در حال ارسال داده‌ها...");
+  else if(statusEl) statusEl.innerText = "در حال ارسال...";
   
   try {
     const res = await fetch(API_URL, {
@@ -392,24 +361,21 @@ async function syncData(manual = false) {
       localStorage.setItem('queue', '[]');
       if(statusEl) statusEl.innerText = "همگام‌سازی شده ✅";
       
-      // اگر عملیات دستی بود یا از فرم‌ها صدا زده شده بود
+      // تغییر مهم: حذف رفرش، فقط نمایش موفقیت و مخفی کردن لودینگ
       if(manual) { 
         Loader.hide();
-        await Alert.success("ارسال موفقیت‌آمیز بود! صفحه بروزرسانی می‌شود.");
-        
-        // نمایش لودینگ قبل از رفرش
-        Loader.show("بارگذاری مجدد...");
-        setTimeout(() => window.location.reload(), 1000); 
+        await Alert.success("ارسال موفقیت‌آمیز بود!");
+        // بروزرسانی صف در UI
+        document.getElementById('offline-status').innerText = `صف ارسال: 0`;
       }
     } else { throw new Error(json.message); }
   } catch(e) {
-    Loader.hide();
-    if(manual) { Alert.error("خطا در ارسال: " + e.message); }
+    if(manual) { Loader.hide(); Alert.error("خطا در ارسال: " + e.message); }
     if(statusEl) statusEl.innerText = "خطا در ارسال ❌";
   }
 }
 
-// ... (توابع completeSetup, init, logout, getQueueLength, loadConfig) ...
+// --- 7. منطق اتصال (Setup Logic) ---
 async function completeSetup() {
   const url = document.getElementById('sheet-url').value;
   if (!url.includes('docs.google.com')) return Alert.error("لینک فایل معتبر نیست!");
@@ -431,6 +397,7 @@ async function completeSetup() {
       Alert.error(json.message);
     }
   } catch (e) { Alert.error("خطا در ارتباط: " + e.message); }
+  // تغییر مهم: اطمینان از مخفی شدن لودینگ در هر حالت
   Loader.hide();
 }
 
@@ -447,7 +414,6 @@ async function init() {
   }
 
   if(!LICENSE) {
-    // صفحه لاگین
     document.body.innerHTML = `
       <div style="display:flex; height:100vh; justify-content:center; align-items:center; flex-direction:column; padding:20px; text-align:center;">
         <h2>🔑 ورود به سیستم</h2>
@@ -463,9 +429,7 @@ async function init() {
     return;
   }
 
-  // **نمایش لودینگ در شروع کار** (چون در HTML هست، اینجا نیازی به show نیست اما محض اطمینان)
-  // اما چون در HTML پیش‌فرض نمایش داده می‌شود، اینجا باید آن را مخفی کنیم وقتی کار تمام شد.
-  
+  Loader.show("دریافت تنظیمات...");
   try {
     if(navigator.onLine) {
       const res = await fetch(`${API_URL}?license=${LICENSE}`);
@@ -503,7 +467,7 @@ async function init() {
     }
   } catch(e) { console.log("Offline config load"); }
   
-  Loader.hide(); // مخفی کردن لودینگ اولیه
+  Loader.hide();
   syncData();
 }
 
