@@ -56,6 +56,51 @@ let LICENSE = localStorage.getItem('license');
 let CONFIG = JSON.parse(localStorage.getItem('config') || '{}');
 let tempContinuousData = [];
 
+// تابع کمکی برای کپی کردن متن
+function copyToClipboard(text, el) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showTooltip(el, "کپی شد! ✅");
+    }).catch(err => {
+      console.error('Failed to copy: ', err);
+      fallbackCopy(text, el);
+    });
+  } else {
+    fallbackCopy(text, el);
+  }
+}
+
+function fallbackCopy(text, el) {
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  document.body.appendChild(textArea);
+  textArea.select();
+  try {
+    document.execCommand('copy');
+    showTooltip(el, "کپی شد! ✅");
+  } catch (err) {
+    console.error('Fallback copy failed', err);
+    Alert.success("ایمیل کپی شد (دستی)"); // اگر همه چی فیل شد حداقل کاربر بفهمه
+  }
+  document.body.removeChild(textArea);
+}
+
+function showTooltip(el, msg) {
+  const originalText = el.innerHTML;
+  el.innerHTML = msg;
+  el.style.backgroundColor = '#d4edda';
+  el.style.borderColor = '#c3e6cb';
+  el.style.color = '#155724';
+  
+  setTimeout(() => {
+    el.innerHTML = originalText;
+    el.style.backgroundColor = '';
+    el.style.borderColor = '';
+    el.style.color = '';
+  }, 1500);
+}
+
+
 const UI = {
   renderHome: () => {
     const app = document.getElementById('app-root');
@@ -144,21 +189,44 @@ const UI = {
   showSetupWizard: (data) => {
     const app = document.getElementById('app-root');
     app.style.display = 'flex';
+    // استایل جدید برای صفحه ستاپ
     app.innerHTML = `
-      <div class="view active" style="padding:30px; text-align:center;">
-        <h2>🚀 راه‌اندازی اولیه</h2>
-        <div style="background:#e3f2fd; padding:15px; border-radius:10px; margin-bottom:20px; text-align:right;">
-          <b>گام ۱:</b> روی دکمه زیر کلیک کنید تا فایل شما ساخته شود.<br>
-          <a href="${data.templateUrl}" target="_blank" class="btn btn-secondary" style="margin-top:10px;">📂 ساخت فایل دیتابیس</a>
+      <div class="view active" style="padding:20px; background: #f8f9fa;">
+        <div style="text-align:center; margin-bottom:25px;">
+          <div style="font-size:3.5rem; margin-bottom:10px;">🚀</div>
+          <h2 style="color:#333; margin:0;">راه‌اندازی سیستم</h2>
+          <p style="color:#777; font-size:0.9rem;">لطفاً مراحل زیر را به ترتیب انجام دهید</p>
         </div>
-        <div style="background:#fff3e0; padding:15px; border-radius:10px; margin-bottom:20px; text-align:right;">
-          <b>گام ۲:</b> فایل جدید را باز کنید، دکمه Share را بزنید و این ایمیل را <b>Editor</b> کنید:<br>
-          <code style="display:block; background:#fff; padding:5px; margin:5px 0; border:1px solid #ccc; text-align:center;">${data.botEmail}</code>
+
+        <div class="setup-card" style="background:white; padding:20px; border-radius:15px; box-shadow:0 4px 15px rgba(0,0,0,0.05); margin-bottom:20px; border-right: 5px solid #4285f4;">
+          <div style="display:flex; align-items:center; margin-bottom:10px;">
+            <span style="background:#e3f2fd; color:#1976d2; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; margin-left:10px;">1</span>
+            <b style="color:#444;">ساخت فایل دیتابیس</b>
+          </div>
+          <p style="font-size:0.85rem; color:#666; margin-bottom:15px; line-height:1.6;">یک کپی از فایل اکسل گوگل در درایو خود بسازید.</p>
+          <a href="${data.templateUrl}" target="_blank" class="btn btn-primary" style="background:#fff; color:#4285f4; border:1px solid #4285f4; font-size:0.9rem; padding:10px;">📂 ایجاد فایل اکسل</a>
         </div>
-        <div style="background:#e8f5e9; padding:15px; border-radius:10px; text-align:right;">
-          <b>گام ۳:</b> آدرس فایل ساخته شده را وارد کنید:<br>
-          <input id="sheet-url" placeholder="https://docs.google.com/..." style="width:100%; direction:ltr; margin-top:5px;">
-          <button onclick="completeSetup()" class="btn btn-primary">🔗 اتصال</button>
+
+        <div class="setup-card" style="background:white; padding:20px; border-radius:15px; box-shadow:0 4px 15px rgba(0,0,0,0.05); margin-bottom:20px; border-right: 5px solid #fbbc04;">
+          <div style="display:flex; align-items:center; margin-bottom:10px;">
+            <span style="background:#fff3e0; color:#f57c00; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; margin-left:10px;">2</span>
+            <b style="color:#444;">دسترسی ربات</b>
+          </div>
+          <p style="font-size:0.85rem; color:#666; margin-bottom:10px; line-height:1.6;">فایل جدید را باز کنید، دکمه <b>Share</b> را بزنید و ایمیل زیر را به عنوان <b>Editor</b> اضافه کنید (روی ایمیل کلیک کنید تا کپی شود):</p>
+          <div onclick="copyToClipboard('${data.botEmail}', this)" style="background:#f1f3f4; padding:12px; border-radius:8px; border:1px dashed #ccc; text-align:center; cursor:pointer; font-family:monospace; direction:ltr; user-select:all; transition: all 0.2s;" title="برای کپی کلیک کنید">
+            ${data.botEmail}
+            <span style="display:block; font-size:0.7rem; color:#999; margin-top:5px; font-family:tahoma;">(برای کپی کلیک کنید)</span>
+          </div>
+        </div>
+
+        <div class="setup-card" style="background:white; padding:20px; border-radius:15px; box-shadow:0 4px 15px rgba(0,0,0,0.05); border-right: 5px solid #34a853;">
+          <div style="display:flex; align-items:center; margin-bottom:10px;">
+            <span style="background:#e8f5e9; color:#2e7d32; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; margin-left:10px;">3</span>
+            <b style="color:#444;">اتصال نهایی</b>
+          </div>
+          <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">آدرس (URL) فایل ساخته شده را در کادر زیر وارد کنید:</p>
+          <input id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%; direction:ltr; margin-bottom:15px; border:1px solid #ddd; padding:12px; border-radius:8px; font-family:monospace; font-size:0.85rem;">
+          <button onclick="completeSetup()" class="btn btn-success">🔗 برقراری اتصال</button>
         </div>
       </div>
     `;
@@ -324,9 +392,7 @@ function saveData(record) {
   q.push(record);
   localStorage.setItem('queue', JSON.stringify(q));
   
-  // اطمینان از بسته بودن لودر قبل از سینک
   Loader.hide();
-  
   syncData();
 }
 
@@ -344,7 +410,6 @@ async function syncData(manual = false) {
     return;
   }
 
-  // فقط اگر دستی باشد لودینگ نشان بده
   if(manual) Loader.show("در حال ارسال داده‌ها...");
   else if(statusEl) statusEl.innerText = "در حال ارسال...";
   
@@ -365,11 +430,9 @@ async function syncData(manual = false) {
       localStorage.setItem('queue', '[]');
       if(statusEl) statusEl.innerText = "همگام‌سازی شده ✅";
       
-      // تغییر مهم: حذف رفرش، فقط نمایش موفقیت و مخفی کردن لودینگ
       if(manual) { 
         Loader.hide();
         await Alert.success("ارسال موفقیت‌آمیز بود!");
-        // بروزرسانی صف در UI
         document.getElementById('offline-status').innerText = `صف ارسال: 0`;
       }
     } else { throw new Error(json.message); }
@@ -389,7 +452,6 @@ async function completeSetup() {
     const res = await fetch(`${API_URL}?license=${LICENSE}&op=connect_sheet&sheet_url=${encodeURIComponent(url)}`);
     const json = await res.json();
     
-    // FIX 1: مخفی کردن لودینگ قبل از نمایش آلرت موفقیت
     Loader.hide(); 
 
     if (json.status === 'maintenance') {
@@ -399,7 +461,6 @@ async function completeSetup() {
 
     if (json.status === 'success') {
       await Alert.success("اتصال برقرار شد! سیستم آماده است.");
-      // FIX 2: جایگزینی رفرش صفحه با راه‌اندازی مجدد منطقی
       init(); // فراخوانی مجدد تابع اولیه برای دریافت کانفیگ جدید
     } else {
       Alert.error(json.message);
