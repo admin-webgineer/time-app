@@ -6,10 +6,11 @@
   <title>سیستم زمان‌سنجی</title>
   <link rel="manifest" href="manifest.json">
   
-  <script>var APP_VERSION = "1.0.2";</script>
+  <!-- کشینگ هوشمند -->
+  <script>var APP_VERSION = "1.0.4";</script>
   
-  <!-- استایل‌های صفحه آپدیت (اینلاین برای اطمینان از لود شدن) -->
   <style>
+    /* استایل صفحه بروزرسانی */
     #maintenance-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: #ffffff; z-index: 99999; display: none;
@@ -30,29 +31,26 @@
 </head>
 <body>
 
-  <!-- 1. صفحه حالت تعمیرات/آپدیت -->
+  <!-- صفحه حالت تعمیرات/آپدیت -->
   <div id="maintenance-overlay">
     <div class="update-icon">🚀</div>
     <h2 class="update-title">در حال بروزرسانی سیستم</h2>
-    <p class="update-text">
-      ما در حال ارتقای نرم‌افزار هستیم.<br>
-      لطفاً چند لحظه صبر کنید، سپس دکمه زیر را بزنید تا نسخه جدید بارگذاری شود.
-    </p>
+    <p class="update-text">سیستم در حال ارتقا می‌باشد.</p>
     <button class="btn-refresh" onclick="forceReload()">دریافت نسخه جدید</button>
   </div>
 
-  <!-- 2. لودینگ -->
+  <!-- کانتینر لودینگ -->
   <div id="loading-overlay" class="hidden">
-    <div class="spinner"></div>
+    <div class="custom-spinner"></div>
     <p class="loading-text">...</p>
   </div>
 
-  <!-- 3. آلرت -->
+  <!-- کانتینر آلرت -->
   <div id="custom-alert-overlay" class="hidden">
     <div class="custom-alert-box">
       <div id="alert-icon" class="alert-icon"></div>
-      <h3 id="alert-title" class="alert-title"></h3>
-      <p id="alert-message" class="alert-message"></p>
+      <h3 id="alert-title"></h3>
+      <p id="alert-message"></p>
       <div class="alert-buttons">
         <button id="alert-ok" class="btn btn-primary">تایید</button>
         <button id="alert-cancel" class="btn btn-gray hidden">لغو</button>
@@ -60,22 +58,18 @@
     </div>
   </div>
 
-  <!-- 4. اپلیکیشن -->
+  <!-- ریشه اپلیکیشن -->
   <div id="app-root" class="app-container"></div>
 
+  <!-- لودر استایل و اسکریپت -->
   <script>
-    // تابع رفرش سخت برای دریافت نسخه جدید
     function forceReload() {
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          for(let registration of registrations) {
-            registration.unregister(); // حذف سرویس ورکر قدیمی
-          }
-          window.location.reload(true); // رفرش کامل
+          for(let registration of registrations) registration.unregister();
+          window.location.reload(true);
         });
-      } else {
-        window.location.reload(true);
-      }
+      } else { window.location.reload(true); }
     }
 
     var css = document.createElement('link');
@@ -87,9 +81,7 @@
     js.src = 'js/app.js?v=' + APP_VERSION;
     document.body.appendChild(js);
 
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js');
-    }
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>
 </body>
 </html>
